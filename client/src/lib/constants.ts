@@ -1,19 +1,41 @@
-export type WallType = "civil" | "gypsum" | "plywood" | "gypsum-glass" | "plywood-glass";
+export type WallType = "civil" | "gypsum" | "plywood" | "gypsum-glass" | "plywood-glass" | "gypsum-plywood";
 
 export const wallOptions = [
   { label: "Civil Wall (Brick)", value: "civil" },
   { label: "Gypsum Partition", value: "gypsum" },
   { label: "Plywood Partition", value: "plywood" },
+  { label: "Gypsum + Plywood", value: "gypsum-plywood" },
   { label: "Gypsum + Glass", value: "gypsum-glass" },
   { label: "Plywood + Glass", value: "plywood-glass" },
 ];
 
 export const subOptionsMap: Record<WallType, string[]> = {
   civil: ["4.5 inch", "9 inch"],
-  gypsum: ["Single", "Double"],
-  plywood: ["Laminated", "Plain"],
-  "gypsum-glass": [],
-  "plywood-glass": [],
+  gypsum: ["Single Layer", "Double Layer"],
+  plywood: ["Single Glazing", "Double Glazing"],
+  "gypsum-plywood": ["Single Layer", "Double Layer"],
+  "gypsum-glass": ["Single Glazing", "Double Glazing"],
+  "plywood-glass": ["Single Glazing", "Double Glazing"],
+};
+
+// Detailed options for glass partitions
+export const glassPartitionOptions = {
+  "gypsum-glass": {
+    glazingType: ["Single Glazing", "Double Glazing"],
+    glassType: ["Clear", "Tinted", "Frosted"],
+    laminateType: ["6mm", "8mm", "10mm", "12mm"],
+    beadingStyle: ["Aluminum", "Wooden", "PVC"],
+    finish: ["Matte", "Glossy", "Semi-Gloss"],
+    frameType: ["Aluminum", "Wooden", "Steel"],
+  },
+  "plywood-glass": {
+    glazingType: ["Single Glazing", "Double Glazing"],
+    glassType: ["Clear", "Tinted", "Frosted"],
+    laminateType: ["6mm", "8mm", "10mm", "12mm"],
+    beadingStyle: ["Aluminum", "Wooden", "PVC"],
+    finish: ["Matte", "Glossy", "Semi-Gloss"],
+    frameType: ["Aluminum", "Wooden", "Steel"],
+  },
 };
 
 export const plywoodTypes = ["4mm", "6mm", "8mm", "12mm"];

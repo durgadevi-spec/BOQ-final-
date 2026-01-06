@@ -46,7 +46,7 @@ export function Sidebar() {
   const [location, setLocation] = useLocation();
   const [isOpen, setIsOpen] = useState(true);
   const [estSearch, setEstSearch] = useState("");
-  const { user, logout } = useData();
+  const { user, logout, supportMessages, materialApprovalRequests } = useData();
 
   // Fetch pending counts from API
   const [pendingShopCount, setPendingShopCount] = useState(0);
@@ -67,19 +67,35 @@ export function Sidebar() {
     })();
   }, []);
 
+  // derive material pending count from central store (keeps counts consistent)
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/materials-pending-approval');
-        if (res.ok) {
-          const data = await res.json();
-          setPendingMaterialCount((data?.materials || []).filter((r: any) => r.status === 'pending').length);
-        }
-      } catch (e) {
-        console.warn('load material count failed', e);
+    try {
+      if (!materialApprovalRequests) {
+        setPendingMaterialCount(0);
+        return;
       }
-    })();
-  }, []);
+      setPendingMaterialCount((materialApprovalRequests || []).filter((r: any) => r.status === 'pending').length);
+    } catch (e) {
+      console.warn('compute material pending count failed', e);
+      setPendingMaterialCount(0);
+    }
+  }, [materialApprovalRequests]);
+
+  // derive message count from store-loaded support messages (prefer unread count)
+  useEffect(() => {
+    try {
+      if (!supportMessages) {
+        setMessageCount(0);
+        return;
+      }
+      // count unread messages for admin view, otherwise count messages sent by the user
+      const unread = (supportMessages || []).filter((m: any) => m.is_read === false).length;
+      setMessageCount(unread || (supportMessages || []).length);
+    } catch (e) {
+      console.warn('compute message count failed', e);
+      setMessageCount(0);
+    }
+  }, [supportMessages]);
 
   const handleLogout = () => {
     logout();
@@ -87,6 +103,7 @@ export function Sidebar() {
   };
 
   const isAdminOrSoftware = user?.role === 'admin' || user?.role === 'software_team';
+  const isAdminOrSoftwareOrPurchaseTeam = user?.role === 'admin' || user?.role === 'software_team' || user?.role === 'purchase_team';
   const isSupplierOrPurchase = user?.role === 'supplier' || user?.role === 'purchase_team';
   const isClient = user?.role === 'user';
 
@@ -125,45 +142,47 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {/* Dashboard Link - varies by role */}
-          <Link href="/dashboard">
-            <div className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors mb-4 cursor-pointer", location === "/dashboard" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}>
-              <LayoutDashboard className="h-4 w-4" />
-              Dashboard
-            </div>
-          </Link>
+          {/* Dashboard Link - hidden for suppliers */}
+          {user?.role !== 'supplier' && (
+            <Link href="/dashboard">
+              <span className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors mb-4 cursor-pointer", location === "/dashboard" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent") }>
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </span>
+            </Link>
+          )}
 
-          {isAdminOrSoftware && (
+          {isAdminOrSoftwareOrPurchaseTeam && (
             <>
               <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Admin
               </div>
               <Link href="/admin/dashboard?tab=materials">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer", currentAdminTab === "materials" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
                   <Package className="h-4 w-4" /> Manage Materials
-                </div>
+                </span>
               </Link>
               <Link href="/admin/dashboard?tab=shops">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer", currentAdminTab === "shops" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
                   <Building2 className="h-4 w-4" /> Manage Shops
-                </div>
+                </span>
               </Link>
               <Link href="/admin/dashboard?tab=categories">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer", currentAdminTab === "categories" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
                   <Layers className="h-4 w-4" /> Categories
-                </div>
+                </span>
               </Link>
               <Link href="/admin/dashboard?tab=approvals">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer", currentAdminTab === "approvals" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
@@ -171,10 +190,10 @@ export function Sidebar() {
                   {pendingShopCount > 0 && (
                     <Badge variant="destructive" className="ml-auto">{pendingShopCount}</Badge>
                   )}
-                </div>
+                </span>
               </Link>
               <Link href="/admin/dashboard?tab=material-approvals">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer", currentAdminTab === "material-approvals" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
@@ -182,10 +201,10 @@ export function Sidebar() {
                   {pendingMaterialCount > 0 && (
                     <Badge variant="destructive" className="ml-auto">{pendingMaterialCount}</Badge>
                   )}
-                </div>
+                </span>
               </Link>
               <Link href="/admin/dashboard?tab=messages">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors mb-4 cursor-pointer", currentAdminTab === "messages" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
@@ -193,16 +212,9 @@ export function Sidebar() {
                   {messageCount > 0 && (
                     <Badge variant="secondary" className="ml-auto">{messageCount}</Badge>
                   )}
-                </div>
+                </span>
               </Link>
-              <Link href="/admin/material-submissions">
-                <div
-                  className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors mb-4 cursor-pointer", location === "/admin/material-submissions" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <AlertCircle className="h-4 w-4" /> Material Submissions
-                </div>
-              </Link>
+              {/* Material Submissions - HIDDEN */}
             </>
           )}
 
@@ -212,12 +224,12 @@ export function Sidebar() {
                 Supplier
               </div>
               <Link href="/supplier/materials">
-                <div
+                <span
                   className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors mb-4 cursor-pointer", location === "/supplier/materials" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent")}
                   onClick={() => setIsOpen(false)}
                 >
                   <Package className="h-4 w-4" /> Material Templates
-                </div>
+                </span>
               </Link>
             </>
           )}
@@ -260,10 +272,10 @@ export function Sidebar() {
             Resources
           </div>
           <Link href="/subscription">
-            <div className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent cursor-pointer">
+            <span className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent cursor-pointer">
               <Package className="h-4 w-4" />
               Subscription
-            </div>
+            </span>
           </Link>
         </nav>
 

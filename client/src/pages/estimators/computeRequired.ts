@@ -4,30 +4,46 @@ import { WallType } from "@/lib/constants";
 export const BRICK_FACE_AREA_FT2 = 0.08; // 1 brick = ~0.08 sq ft
 export const BAG_VOLUME_FT3 = 1.25; // 1 bag cement = 1.25 cu ft
 export const ROCKWOOL_BAG_COVER_SQFT = 70;
+export const ROCKWOOL_KG_PER_SHEET = 10;
 
 export interface ComputedMaterials {
   // Civil materials
-  bricks?: number;
-  cementBags?: number;
-  sandCubicFt?: number;
+  roundedBricks?: number;
+  roundedCementBags?: number;
+  roundedSandCubicFt?: number;
   
   // Gypsum materials
-  gypsumBoards?: number;
+  boards?: number;
+  rockwoolSheets?: number;
   rockwoolBags?: number;
-  channels?: number;
+  floorChannel?: number;
+  ceilingChannel?: number;
   studs?: number;
   jointTape?: number;
   jointCompound?: number;
+  screwsGypsum?: number;
   
   // Plywood materials
-  plywoodSheets?: number;
+  boardsPlywood?: number;
   aluminiumChannels?: number;
   laminateSheets?: number;
+  screwsPlywood?: number;
+  rockwoolKg?: number;
+  
+  // Gypsum + Plywood materials (Hybrid)
+  boardsGypsum?: number;
+  boardsPlywoodHybrid?: number;
+  studsGypsum?: number;
+  verticalStuds?: number;
   
   // Glass partition materials
   glassArea?: number;
+  glassChannels?: number;
+  glassLength?: number;
+  glassHeight?: number;
   
   area?: number;
+  glazingType?: string;
 }
 
 export const computeRequired = (
@@ -42,131 +58,214 @@ export const computeRequired = (
   const area = length * height;
   const wastageFactor = 1 + (brickWastagePercent / 100);
 
+  // ============= CIVIL WALL =============
   if (wallType === "civil") {
-    // Determine if 9 inch or 4.5 inch wall
-    const is9Inch = subOption === "9 inch";
-    const thickness = is9Inch ? 0.75 : 0.375; // in feet
+    const brickFaceArea = BRICK_FACE_AREA_FT2;
+    const baseBricks = area / brickFaceArea;
 
-    // Calculate volume
-    const volume = area * thickness;
+    let brickMultiplier = 1;
+    if (subOption === "9 inch") {
+      brickMultiplier = 2;
+    }
 
-    // Brick calculation: 1 brick face area = 0.08 sq ft
-    // For 9 inch (double layer): multiply by 2
-    const baseBricks = area / BRICK_FACE_AREA_FT2;
-    const bricks = is9Inch 
-      ? Math.ceil(baseBricks * 2 * wastageFactor)
-      : Math.ceil(baseBricks * wastageFactor);
+    const bricks = baseBricks * brickMultiplier;
+    const bricksWithWastage = bricks * wastageFactor;
 
-    // Cement & Sand calculation
-    // Mortar is 1:4 (cement:sand)
-    // 1 cubic foot of mortar needs 0.2 cement bags + 0.8 sand
-    const mortarVolume = volume;
-    const cementBags = Math.ceil((mortarVolume / BAG_VOLUME_FT3) * wastageFactor);
-    const sandCubicFt = Math.ceil(mortarVolume * 4 * wastageFactor);
+    let thicknessFt = 0.75; // default 9 inch
+    if (subOption === "4.5 inch") {
+      thicknessFt = 0.375;
+    }
+
+    const cementVolumeFt3 = area * thicknessFt * (1 / 5);
+    const sandVolumeFt3 = area * thicknessFt * (4 / 5);
 
     return {
-      bricks,
-      cementBags,
-      sandCubicFt,
+      roundedBricks: Math.ceil(bricksWithWastage),
+      roundedCementBags: Math.ceil(cementVolumeFt3 / BAG_VOLUME_FT3),
+      roundedSandCubicFt: Math.ceil(sandVolumeFt3),
       area,
     };
   }
 
+  // ============= GYPSUM ONLY =============
   if (wallType === "gypsum") {
-    const isDouble = subOption?.toLowerCase().includes("double");
-    const BOARD_AREA_SQFT = 24; // Standard gypsum board
-    
-    // Boards needed (both sides)
+    const isDouble = subOption === "Double Layer" || /double/i.test(subOption || "");
+    const areaOneFace = area;
+    const BOARD_AREA_SQFT = 24;
     const faces = 2;
     const layers = isDouble ? 2 : 1;
-    const boardsNeeded = Math.ceil((area / BOARD_AREA_SQFT) * faces * layers);
 
-    // Rockwool insulation
-    const rockwoolBags = Math.ceil(area / ROCKWOOL_BAG_COVER_SQFT);
+    const gypsumArea = areaOneFace * faces * layers;
+    const boards = gypsumArea / BOARD_AREA_SQFT;
+    const rockwoolSheets = (areaOneFace) / ROCKWOOL_BAG_COVER_SQFT;
 
-    // Channels and studs
-    const channels = Math.ceil((length / 4.5) * 2); // Floor + ceiling channels
-    const studs = Math.ceil((length / 2 + 1) * 2); // Studs on both sides
+    const CHANNEL_PIECE_FT = 4.5;
+    const floorChannel = (length || 0) / CHANNEL_PIECE_FT;
+    const ceilingChannel = (length || 0) / CHANNEL_PIECE_FT;
 
-    // Joint tape and compound
-    const jointTape = Math.ceil(boardsNeeded);
-    const jointCompound = Math.ceil(boardsNeeded / 2);
+    const studsPerSide = (length || 0) / 2 + 1;
+    const studs = studsPerSide * 2;
+
+    const jointTape = gypsumArea / 216;
+    const jointCompound = gypsumArea / 432;
+    const screwsGypsum = boards * 40;
 
     return {
-      gypsumBoards: boardsNeeded,
-      rockwoolBags,
-      channels,
+      boards,
+      rockwoolSheets,
+      floorChannel,
+      ceilingChannel,
       studs,
       jointTape,
       jointCompound,
+      screwsGypsum,
+      glazingType: isDouble ? "Double Layer" : "Single Layer",
+      area: areaOneFace,
+    };
+  }
+
+  // ============= PLYWOOD ONLY =============
+  if (wallType === "plywood") {
+    const L = length ?? 0;
+    const H = height ?? 0;
+    const A = L * H;
+
+    const BOARD_AREA_SQFT = 32;
+    const isDouble = (subOption || "").toLowerCase() === "double" || /double/i.test(subOption || "");
+    const faces = 2;
+    const layers = isDouble ? 2 : 1;
+
+    const totalPlywoodArea = A * faces * layers;
+    const boardsPlywood = totalPlywoodArea / BOARD_AREA_SQFT;
+    const laminateSheets = boardsPlywood;
+    const screwsPlywood = boardsPlywood * 40;
+
+    const channelLength = 10;
+    const tracksPieces = (L * 2) / channelLength;
+    const studsPerRun = L / 2 + 1;
+    const studPiecesPerLine = H / channelLength;
+    const totalStudPieces = studsPerRun * studPiecesPerLine;
+    const aluminiumChannels = tracksPieces + totalStudPieces;
+
+    const ROCKWOOL_BAG_COVER_SQFT = 70;
+    const rockwoolBags = A / ROCKWOOL_BAG_COVER_SQFT;
+
+    return {
+      boardsPlywood,
+      laminateSheets,
+      screwsPlywood,
+      aluminiumChannels,
+      rockwoolBags,
+      glazingType: isDouble ? "Double Layer" : "Single Layer",
+      area: A,
+    };
+  }
+
+  // ============= GYPSUM + GLASS =============
+  if (wallType === "gypsum-glass") {
+    const length_val = length || 0;
+    const height_val = height || 0;
+    const glassHeightVal = 0; // Default, should be passed from UI
+    const gHeight = height_val - glassHeightVal;
+
+    const isDouble = subOption === "Double Glazing";
+    const baseBoards = (gHeight * length_val * 2) / 24;
+    const boards = isDouble ? baseBoards * 2 : baseBoards;
+
+    const rockwoolBags = (gHeight * length_val * 2) / 70;
+    const floorChannel = length_val / 2;
+    const ceilingChannel = length_val / 2;
+    const studs = length_val / 5;
+
+    const jointTape = (gHeight * length_val * 2) / 216;
+    const jointCompound = (gHeight * length_val * 2) / 432;
+
+    // Glass channels calculation
+    const channelPieceLengthFt = 10;
+    const verticalPieces = (glassHeightVal || 0) / channelPieceLengthFt;
+    const horizontalPieces = (length_val || 0) / channelPieceLengthFt;
+    const glassChannels = verticalPieces * 2 + horizontalPieces * 2;
+
+    return {
+      boards,
+      rockwoolBags,
+      floorChannel,
+      ceilingChannel,
+      studs,
+      jointTape,
+      jointCompound,
+      glassChannels,
+      glassArea: glassHeightVal * length_val,
+      glazingType: isDouble ? "Double Layer" : "Single Layer",
+      area: gHeight * length_val,
+    };
+  }
+
+  // ============= PLYWOOD + GLASS =============
+  if (wallType === "plywood-glass") {
+    const baseBoards = area / 24;
+    const isDouble = subOption === "Double Glazing";
+    const boards = isDouble ? baseBoards * 2 : baseBoards;
+
+    const laminateSheets = baseBoards;
+    const aluminiumChannels = (length || 0) / 2;
+    const rockwoolBags = area / 70;
+    const rockwoolKg = rockwoolBags * 20;
+
+    // Glass channels calculation
+    const channelPieceLengthFt = 10;
+    const verticalPieces = (0) / channelPieceLengthFt; // glassHeight should be passed
+    const horizontalPieces = (length || 0) / channelPieceLengthFt;
+    const glassChannels = verticalPieces * 2 + horizontalPieces * 2;
+
+    return {
+      boardsPlywood: boards,
+      laminateSheets,
+      aluminiumChannels,
+      rockwoolBags,
+      rockwoolKg,
+      glassChannels,
+      glassArea: 0, // Should be calculated from glassHeight
+      glazingType: isDouble ? "Double Layer" : "Single Layer",
       area,
     };
   }
 
-  if (wallType === "plywood") {
-    const BOARD_AREA_SQFT = 32; // Standard plywood sheet
-    
-    // Plywood sheets needed (both sides)
-    const plywoodSheets = Math.ceil((area / BOARD_AREA_SQFT) * 2);
+  // ============= GYPSUM + PLYWOOD (HYBRID) =============
+  if (wallType === "gypsum-plywood") {
+    const area_val = (length || 0) * (height || 0);
 
-    // Aluminium channels
-    const aluminiumChannels = Math.ceil(length * 1.2);
+    // Gypsum Side
+    let boardsGypsum = area_val / 24;
+    const jointTape = 1;
+    const JOINT_COMPOUND_COVERAGE = 120;
+    const jointCompound = area_val / JOINT_COMPOUND_COVERAGE;
 
-    // Laminate (same as plywood)
-    const laminateSheets = plywoodSheets;
+    // Rockwool in Bags
+    const ROCKWOOL_SQFT_PER_BAG = 70;
+    const rockwoolBags = area_val / ROCKWOOL_SQFT_PER_BAG;
 
-    // Rockwool insulation
-    const rockwoolBags = Math.ceil(area / ROCKWOOL_BAG_COVER_SQFT);
+    // Plywood Side
+    let boardsPlywood = area_val / 32;
+    const aluminiumChannels = (length || 0) * 1.2;
+    const laminateSheets = boardsPlywood;
+
+    // Double layer rule
+    if (/double/i.test(subOption || "")) {
+      boardsGypsum *= 2;
+      boardsPlywood *= 2;
+    }
 
     return {
-      plywoodSheets,
+      boardsGypsum,
+      jointTape,
+      jointCompound,
+      boardsPlywoodHybrid: boardsPlywood,
       aluminiumChannels,
       laminateSheets,
       rockwoolBags,
-      area,
-    };
-  }
-
-  if (wallType === "gypsum-glass") {
-    const GLASS_AREA_PERCENT = 0.6; // 60% glass, 40% gypsum
-    const BOARD_AREA_SQFT = 24; // Standard gypsum board
-    const GLASS_SQFT_PER_PANEL = 10; // Average glass panel size
-    
-    // Gypsum for frame (40% of area)
-    const gypsumBoards = Math.ceil((area * (1 - GLASS_AREA_PERCENT)) / BOARD_AREA_SQFT * 2);
-    
-    // Glass panels (60% of area, both sides)
-    const glassArea = Math.ceil(area * GLASS_AREA_PERCENT * 2);
-    
-    // Aluminum frame (for glass panels)
-    const aluminiumChannels = Math.ceil((length + height) * 2);
-    
-    return {
-      gypsumBoards,
-      glassArea,
-      aluminiumChannels,
-      area,
-    };
-  }
-
-  if (wallType === "plywood-glass") {
-    const GLASS_AREA_PERCENT = 0.5; // 50% glass, 50% plywood
-    const BOARD_AREA_SQFT = 32; // Standard plywood sheet
-    
-    // Plywood for lower portion (50% of area, both sides)
-    const plywoodSheets = Math.ceil((area * GLASS_AREA_PERCENT) / BOARD_AREA_SQFT * 2);
-    
-    // Glass panels (50% of area, both sides)
-    const glassArea = Math.ceil(area * GLASS_AREA_PERCENT * 2);
-    
-    // Aluminum frame
-    const aluminiumChannels = Math.ceil((length + height) * 2);
-    
-    return {
-      plywoodSheets,
-      glassArea,
-      aluminiumChannels,
-      area,
+      glazingType: /double/i.test(subOption || "") ? "Double Layer" : "Single Layer",
+      area: area_val,
     };
   }
 

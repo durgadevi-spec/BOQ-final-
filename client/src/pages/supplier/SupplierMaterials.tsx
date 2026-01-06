@@ -20,12 +20,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useData } from "@/lib/store";
 import {
   AlertCircle,
   CheckCircle2,
   Package,
   Plus,
   Loader2,
+  MessageSquare,
+  Trash2,
 } from "lucide-react";
 
 interface MaterialTemplate {
@@ -46,7 +49,13 @@ const Required = () => <span className="text-red-500 ml-1">*</span>;
 
 export default function SupplierMaterials() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"templates" | "submissions">("templates");
+  const { user, addSupportMessage, deleteMessage, supportMessages } = useData();
+  const [activeTab, setActiveTab] = useState<"templates" | "submissions" | "support">("templates");
+  
+  // Support Message State
+  const [supportSenderName, setSupportSenderName] = useState("");
+  const [supportSenderInfo, setSupportSenderInfo] = useState("");
+  const [supportMsg, setSupportMsg] = useState("");
   
   // Material Templates State
   const [templates, setTemplates] = useState<MaterialTemplate[]>([]);
@@ -55,6 +64,11 @@ export default function SupplierMaterials() {
   // Supplier Submissions State
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+
+  // Categories State
+  const [categories, setCategories] = useState<string[]>([]);
+  const [subcategories, setSubcategories] = useState<string[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
 
   // Form State
   const [selectedTemplate, setSelectedTemplate] = useState<MaterialTemplate | null>(null);
@@ -67,8 +81,12 @@ export default function SupplierMaterials() {
     unit: "",
     brandname: "",
     modelnumber: "",
+    category: "",
     subcategory: "",
     technicalspecification: "",
+    dimensions: "",
+    finishtype: "",
+    metaltype: "",
   });
 
   // Load material templates on mount
@@ -76,11 +94,13 @@ export default function SupplierMaterials() {
     loadMaterialTemplates();
     loadSupplierSubmissions();
     loadShops();
+    loadCategories();
   }, []);
 
   const loadMaterialTemplates = async () => {
     try {
       const token = localStorage.getItem("authToken");
+      console.log('[SupplierMaterials] loadMaterialTemplates token?', !!token);
       const response = await fetch("/api/material-templates", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -101,9 +121,17 @@ export default function SupplierMaterials() {
   const loadSupplierSubmissions = async () => {
     try {
       const token = localStorage.getItem("authToken");
+      console.log('[SupplierMaterials] loadSupplierSubmissions token?', !!token);
       const response = await fetch("/api/supplier/my-submissions", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('loadSupplierSubmissions failed', response.status, text);
+        toast({ title: 'Error', description: `Failed to load submissions: ${response.status}`, variant: 'destructive' });
+        setSubmissions([]);
+        return;
+      }
       const data = await response.json();
       setSubmissions(data.submissions || []);
     } catch (error) {
@@ -130,6 +158,35 @@ export default function SupplierMaterials() {
     }
   };
 
+  const loadCategories = async () => {
+    try {
+      setLoadingCategories(true);
+      const response = await fetch("/api/material-categories");
+      const data = await response.json();
+      setCategories(data.categories || []);
+    } catch (error) {
+      console.error("Error loading categories:", error);
+      // Non-critical, don't show error toast
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
+  const loadSubcategories = async (category: string) => {
+    if (!category) {
+      setSubcategories([]);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/material-subcategories/${encodeURIComponent(category)}`);
+      const data = await response.json();
+      setSubcategories(data.subcategories || []);
+    } catch (error) {
+      console.error("Error loading subcategories:", error);
+      setSubcategories([]);
+    }
+  };
+
   const handleSelectTemplate = (template: MaterialTemplate) => {
     setSelectedTemplate(template);
     setFormData({
@@ -137,10 +194,18 @@ export default function SupplierMaterials() {
       unit: "",
       brandname: "",
       modelnumber: "",
+      category: template.category || "",
       subcategory: "",
       technicalspecification: "",
+      dimensions: "",
+      finishtype: "",
+      metaltype: "",
     });
     setSelectedShop("");
+    // Load subcategories if template has a category
+    if (template.category) {
+      loadSubcategories(template.category);
+    }
   };
 
   const handleSubmitMaterial = async (e: React.FormEvent) => {
@@ -155,10 +220,10 @@ export default function SupplierMaterials() {
       return;
     }
 
-    if (!formData.rate || !formData.unit) {
+    if (!formData.rate || !formData.unit || !formData.category) {
       toast({
         title: "Error",
-        description: "Rate and unit are required",
+        description: "Rate, unit, and category are required",
         variant: "destructive",
       });
       return;
@@ -167,6 +232,7 @@ export default function SupplierMaterials() {
     setSubmitting(true);
     try {
       const token = localStorage.getItem("authToken");
+      console.log('[SupplierMaterials] submit token?', !!token);
       const response = await fetch("/api/material-submissions", {
         method: "POST",
         headers: {
@@ -181,7 +247,15 @@ export default function SupplierMaterials() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to submit material");
+        const text = await response.text();
+        console.error('submit material failed', response.status, text);
+        if (response.status === 401) {
+          throw new Error('Unauthorized: please log in');
+        }
+        if (response.status === 403) {
+          throw new Error('Forbidden: your account lacks supplier role');
+        }
+        throw new Error(`Failed to submit material (${response.status}): ${text}`);
       }
 
       const data = await response.json();
@@ -197,8 +271,12 @@ export default function SupplierMaterials() {
         unit: "",
         brandname: "",
         modelnumber: "",
+        category: "",
         subcategory: "",
         technicalspecification: "",
+        dimensions: "",
+        finishtype: "",
+        metaltype: "",
       });
       setSelectedShop("");
 
@@ -214,6 +292,35 @@ export default function SupplierMaterials() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSupportSubmit = () => {
+    if (!supportMsg || !supportSenderName) {
+      toast({
+        title: "Error",
+        description: "Sender name and message are required",
+        variant: "destructive",
+      });
+      return;
+    }
+    (async () => {
+      try {
+        await addSupportMessage?.(supportSenderName, supportMsg, supportSenderInfo);
+        toast({
+          title: "Request Sent",
+          description: "Message sent to Admin & Software Team.",
+        });
+        setSupportMsg("");
+        setSupportSenderName("");
+        setSupportSenderInfo("");
+      } catch (err) {
+        toast({
+          title: "Error",
+          description: "Failed to send message",
+          variant: "destructive",
+        });
+      }
+    })();
   };
 
   return (
@@ -247,31 +354,29 @@ export default function SupplierMaterials() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {templates.map((template) => (
                   <Card
                     key={template.id}
-                    className={`cursor-pointer transition-all ${
+                    className={`cursor-pointer transition-all p-3 ${
                       selectedTemplate?.id === template.id
                         ? "ring-2 ring-blue-500 bg-blue-50"
-                        : "hover:shadow-lg"
+                        : "hover:shadow-md"
                     }`}
                     onClick={() => handleSelectTemplate(template)}
                   >
-                    <CardHeader>
-                      <CardTitle className="text-lg">{template.name}</CardTitle>
-                      <CardDescription>{template.code}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium truncate">{template.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{template.code}</div>
                       {template.category && (
-                        <Badge variant="outline">{template.category}</Badge>
+                        <Badge variant="outline" className="text-xs mt-1">{template.category}</Badge>
                       )}
                       {selectedTemplate?.id === template.id && (
-                        <div className="mt-4 text-sm text-blue-600 font-semibold">
+                        <div className="mt-2 text-xs text-blue-600 font-semibold">
                           ✓ Selected
                         </div>
                       )}
-                    </CardContent>
+                    </div>
                   </Card>
                 ))}
               </div>
@@ -363,7 +468,7 @@ export default function SupplierMaterials() {
                     </div>
                   </div>
 
-                  {/* Model Number and Subcategory */}
+                  {/* Model Number and Category */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Model Number</Label>
@@ -377,14 +482,52 @@ export default function SupplierMaterials() {
                     </div>
 
                     <div>
+                      <Label>
+                        Category <Required />
+                      </Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, category: value, subcategory: "" });
+                          loadSubcategories(value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Subcategory */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                       <Label>Subcategory</Label>
-                      <Input
-                        placeholder="Enter subcategory"
+                      <Select
                         value={formData.subcategory}
-                        onChange={(e) =>
-                          setFormData({ ...formData, subcategory: e.target.value })
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, subcategory: value })
                         }
-                      />
+                        disabled={!formData.category || subcategories.length === 0}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={subcategories.length === 0 ? "No subcategories available" : "Select subcategory"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subcategories.map((subcat) => (
+                            <SelectItem key={subcat} value={subcat}>
+                              {subcat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -402,6 +545,42 @@ export default function SupplierMaterials() {
                       }
                       rows={4}
                     />
+                  </div>
+
+                  {/* Dimensions, Finish Type, Metal Type */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label>Dimensions</Label>
+                      <Input
+                        placeholder="Enter dimensions"
+                        value={formData.dimensions}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dimensions: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Finish Type</Label>
+                      <Input
+                        placeholder="e.g., matte, glossy, satin"
+                        value={formData.finishtype}
+                        onChange={(e) =>
+                          setFormData({ ...formData, finishtype: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Metal Type</Label>
+                      <Input
+                        placeholder="e.g., steel, copper, aluminum"
+                        value={formData.metaltype}
+                        onChange={(e) =>
+                          setFormData({ ...formData, metaltype: e.target.value })
+                        }
+                      />
+                    </div>
                   </div>
 
                   {/* Submit Button */}
@@ -508,6 +687,121 @@ export default function SupplierMaterials() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Technical Support Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <MessageSquare className="w-5 h-5" />
+              <h2 className="text-2xl font-semibold">Technical Support</h2>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Send Message to Admin & Software Team</CardTitle>
+                <CardDescription>
+                  Request new categories or report issues
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Sender Name Input */}
+                <div className="space-y-2">
+                  <Label>Your Name <Required /></Label>
+                  <Input
+                    placeholder="Enter your name..."
+                    value={supportSenderName}
+                    onChange={(e) => setSupportSenderName(e.target.value)}
+                  />
+                </div>
+
+                {/* Additional Info Input */}
+                <div className="space-y-2">
+                  <Label>Additional Information (Optional)</Label>
+                  <Textarea
+                    placeholder="Any additional context or details..."
+                    className="min-h-[80px]"
+                    value={supportSenderInfo}
+                    onChange={(e) => setSupportSenderInfo(e.target.value)}
+                  />
+                </div>
+
+                {/* Message Input */}
+                <div className="space-y-2">
+                  <Label>Message / Request <Required /></Label>
+                  <Textarea
+                    placeholder="I need a new category for 'Smart Home Devices'..."
+                    className="min-h-[150px]"
+                    value={supportMsg}
+                    onChange={(e) => setSupportMsg(e.target.value)}
+                  />
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-sm text-blue-700 dark:text-blue-300">
+                  ✓ This message will be sent to Admin & Software Team
+                </div>
+
+                <Button
+                  onClick={handleSupportSubmit}
+                >
+                  <MessageSquare className="mr-2 h-4 w-4" /> Send Request
+                </Button>
+
+                {/* Display list of sent messages */}
+                {((supportMessages || []).filter((msg: any) => msg.sender_name === supportSenderName)).length === 0 ? (
+                  <p className="text-muted-foreground text-sm mt-4">No messages sent yet</p>
+                ) : (
+                  <div className="mt-6 space-y-3">
+                    <p className="font-semibold text-sm">Your Sent Messages:</p>
+                    {(supportMessages || []).filter((msg: any) => msg.sender_name === supportSenderName).map((msg: any) => (
+                      <Card key={msg.id} className="border-border/50">
+                        <CardContent className="pt-6 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="text-sm text-muted-foreground">
+                                Sent: {new Date(msg.sent_at || msg.sentAt).toLocaleString()}
+                              </p>
+                              {msg.info && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  <span className="font-semibold">Info: </span>{msg.info}
+                                </p>
+                              )}
+                            </div>
+                            {user?.role === 'supplier' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  (async () => {
+                                    try {
+                                      await deleteMessage?.(msg.id);
+                                      toast({
+                                        title: "Success",
+                                        description: "Message deleted",
+                                      });
+                                    } catch (err) {
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to delete message",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  })();
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-sm leading-relaxed bg-muted/50 p-3 rounded">
+                            {msg.message}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

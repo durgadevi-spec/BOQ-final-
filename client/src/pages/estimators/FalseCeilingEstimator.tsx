@@ -31,6 +31,125 @@ interface MaterialWithQuantity {
   available: boolean;
 }
 
+// ----- In-file ceiling compute helpers and constants -----
+export type CeilingTypeLocal =
+  | "gypsum-ceiling"
+  | "pop-ceiling"
+  | "grid-ceiling"
+  | "wooden-ceiling"
+  | "pvc-ceiling"
+  | "metal-ceiling";
+
+export type ChannelType =
+  | "main-runner"
+  | "cross-tee"
+  | "wall-angle"
+  | "suspension"
+  | "furring"
+  | "ceiling-track";
+
+export interface CeilingComputeResult {
+  area: number;
+  perimeter: number;
+  mainRunnerLength: number;
+  crossTeeLength: number;
+  wallAngleLength: number;
+  suspensionLength: number;
+  furringLength: number;
+  ceilingTrackLength: number;
+  panelCount: number;
+  hangerCount: number;
+  screwBoxes: number;
+  jointTapeRolls: number;
+  jointCompoundBags: number;
+}
+
+export const CHANNEL_TYPES_LOCAL = [
+  { value: "main-runner", label: "Main Runner Channels", rate: 165, unit: "rft", coveragePerUnit: 4 },
+  { value: "cross-tee", label: "Cross Tees / Secondary Channels", rate: 95, unit: "rft", coveragePerUnit: 2 },
+  { value: "wall-angle", label: "Wall Angles / Perimeter Channels", rate: 85, unit: "rft", coveragePerUnit: 1 },
+  { value: "suspension", label: "Suspension Channels", rate: 125, unit: "rft", coveragePerUnit: 16 },
+  { value: "furring", label: "Furring Channels", rate: 75, unit: "rft", coveragePerUnit: 1.5 },
+  { value: "ceiling-track", label: "Ceiling Track Channels", rate: 95, unit: "rft", coveragePerUnit: 1 },
+];
+
+export const computeCeilingRequired = (
+  ceilingType: CeilingTypeLocal | null,
+  length: number | null,
+  width: number | null,
+  gridSpacing: string = "2x2",
+  wastagePercent: number = 10
+): CeilingComputeResult | null => {
+  if (!ceilingType || !length || !width) return null;
+
+  const area = length * width;
+  const perimeter = 2 * (length + width);
+  const wastageFactor = 1 + wastagePercent / 100;
+
+  const mainRunnerChannel = CHANNEL_TYPES_LOCAL.find(c => c.value === "main-runner")!;
+  const crossTeeChannel = CHANNEL_TYPES_LOCAL.find(c => c.value === "cross-tee")!;
+  const wallAngleChannel = CHANNEL_TYPES_LOCAL.find(c => c.value === "wall-angle")!;
+  const suspensionChannel = CHANNEL_TYPES_LOCAL.find(c => c.value === "suspension")!;
+  const furringChannel = CHANNEL_TYPES_LOCAL.find(c => c.value === "furring")!;
+  const ceilingTrackChannel = CHANNEL_TYPES_LOCAL.find(c => c.value === "ceiling-track")!;
+
+  const mainRunnerSpacing = mainRunnerChannel.coveragePerUnit;
+  const mainRunnerRows = Math.ceil(width / mainRunnerSpacing);
+  const mainRunnerLength = mainRunnerRows * length * wastageFactor;
+
+  const crossTeeSpacing = crossTeeChannel.coveragePerUnit;
+  const crossTeesPerRow = Math.ceil(length / crossTeeSpacing);
+  const crossTeeLength = crossTeesPerRow * mainRunnerRows * width * wastageFactor / mainRunnerRows;
+
+  const wallAngleLength = perimeter * wastageFactor;
+
+  const suspensionPoints = Math.ceil(area / suspensionChannel.coveragePerUnit);
+  const avgDropHeight = 0.5;
+  const suspensionLength = suspensionPoints * avgDropHeight * wastageFactor;
+
+  const furringSpacing = furringChannel.coveragePerUnit;
+  const furringRows = Math.ceil(width / furringSpacing);
+  const furringLength = furringRows * length * wastageFactor;
+
+  const ceilingTrackLength = perimeter * wastageFactor;
+
+  let panelCount = 0;
+  const tileArea = gridSpacing === "2x4" ? 8 : 4;
+  if (ceilingType === "grid-ceiling") {
+    panelCount = Math.ceil((area / tileArea) * wastageFactor);
+  } else {
+    const boardArea = 24;
+    panelCount = Math.ceil((area / boardArea) * wastageFactor);
+  }
+
+  const hangerCount = Math.ceil(area / 16) * wastageFactor;
+
+  const screwsPerSqft = 4;
+  const screwsPerBox = 500;
+  const screwBoxes = Math.ceil((area * screwsPerSqft) / screwsPerBox);
+
+  const jointTapeRolls = Math.ceil(area / 200);
+  const jointCompoundBags = Math.ceil(area / 100);
+
+  return {
+    area,
+    perimeter,
+    mainRunnerLength,
+    crossTeeLength,
+    wallAngleLength,
+    suspensionLength,
+    furringLength,
+    ceilingTrackLength,
+    panelCount,
+    hangerCount,
+    screwBoxes,
+    jointTapeRolls,
+    jointCompoundBags,
+  };
+};
+
+// ----- end ceiling helpers -----
+
 // Ceiling types and required materials
 const CEILING_TYPES = {
   gypsum: {

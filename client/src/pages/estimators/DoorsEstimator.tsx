@@ -34,6 +34,124 @@ interface MaterialWithQuantity {
   shopName: string;
 }
 
+// ----- In-file door compute helpers and constants (kept local, not exported as default) -----
+export interface RequiredMaterial {
+  type: string;
+  required: number;
+  unit: string;
+  rate: number;
+  category: string;
+}
+
+export interface DoorComputeResult {
+  doorArea: number;
+  framePerimeter: number;
+  frameRunningFeet: number;
+  requiredMaterials: RequiredMaterial[];
+}
+
+export const computeDoorRequired = (
+  doorType: string | null,
+  width: number | null,
+  height: number | null,
+  frameWidth: number = 0.33,
+  hasFrame: boolean = true,
+  subOption?: string | null,
+  glazingType?: string | null
+): DoorComputeResult | null => {
+  if (!doorType || !width || !height) return null;
+
+  const doorArea = width * height;
+  const framePerimeter = 2 * (width + height);
+  const frameRunningFeet = hasFrame ? Math.ceil(framePerimeter) : 0;
+  
+  const requiredMaterials: RequiredMaterial[] = [];
+
+  let hingesRequired = 3;
+  if (height > 7) hingesRequired = 4;
+  if (height > 8) hingesRequired = 5;
+
+  if (hasFrame) {
+    requiredMaterials.push({ type: "Door Frame - Wooden", required: frameRunningFeet, unit: "rft", rate: 280, category: "Frame" });
+    requiredMaterials.push({ type: "Frame Screws", required: Math.ceil(frameRunningFeet * 2), unit: "pcs", rate: 2, category: "Frame" });
+    requiredMaterials.push({ type: "Wall Plugs / Anchors", required: Math.ceil(frameRunningFeet * 1.5), unit: "pcs", rate: 5, category: "Frame" });
+  }
+
+  switch (doorType) {
+    case "flush":
+    case "flush-door":
+      requiredMaterials.push({ type: subOption === "With Vision Panel" ? "Flush Door - BWR (With VP)" : "Flush Door - BWR", required: 1, unit: "pcs", rate: subOption === "With Vision Panel" ? 4500 : 3500, category: "Door Panel" });
+      if (subOption === "With Vision Panel") {
+        requiredMaterials.push({ type: "Vision Panel Glass", required: 1, unit: "sqft", rate: 280, category: "Door Panel" });
+      }
+      requiredMaterials.push({ type: "Hinges - SS (Pair)", required: hingesRequired, unit: "pair", rate: 180, category: "Hardware" });
+      break;
+
+    case "wpc":
+    case "wpc-door":
+      requiredMaterials.push({ type: subOption === "Hollow Core" ? "WPC Door - Hollow" : "WPC Door - Solid", required: 1, unit: "pcs", rate: subOption === "Hollow Core" ? 3800 : 5500, category: "Door Panel" });
+      requiredMaterials.push({ type: "Hinges - SS (Pair)", required: hingesRequired, unit: "pair", rate: 180, category: "Hardware" });
+      break;
+
+    case "glassdoor":
+    case "glass-door":
+      const glassThickness = subOption === "Frameless" ? "12mm" : "10mm";
+      requiredMaterials.push({ type: `Glass - Toughened ${glassThickness}`, required: Math.ceil(doorArea), unit: "sqft", rate: glassThickness === "12mm" ? 420 : 320, category: "Door Panel" });
+      requiredMaterials.push({ type: "Patch Fitting - Standard", required: 1, unit: "set", rate: 2800, category: "Hardware" });
+      requiredMaterials.push({ type: "Floor Spring - Standard", required: 1, unit: "pcs", rate: 3500, category: "Hardware" });
+      if (subOption === "Framed") {
+        requiredMaterials.push({ type: "Header Rail", required: 1, unit: "pcs", rate: 1500, category: "Hardware" });
+        requiredMaterials.push({ type: "Side Rail", required: 2, unit: "pcs", rate: 1200, category: "Hardware" });
+      }
+      break;
+
+    case "wooden":
+    case "wooden-door":
+      requiredMaterials.push({ type: subOption === "Solid Wood" ? "Wooden Door - Teak" : "Wooden Door - Sal", required: 1, unit: "pcs", rate: subOption === "Solid Wood" ? 18000 : 12000, category: "Door Panel" });
+      requiredMaterials.push({ type: "Hinges - Brass (Pair)", required: hingesRequired, unit: "pair", rate: 350, category: "Hardware" });
+      break;
+
+    case "stile":
+    case "stile-door":
+      const glassArea = Math.ceil(doorArea * 0.6);
+      const frameArea = Math.ceil(doorArea * 0.4);
+      const isDoubleGlazing = glazingType === "Double Glazing" || subOption === "Double Glazing";
+      requiredMaterials.push({ type: isDoubleGlazing ? "Glass - Toughened 12mm (DGU)" : "Glass - Toughened 10mm", required: glassArea, unit: "sqft", rate: isDoubleGlazing ? 650 : 320, category: "Door Panel" });
+      requiredMaterials.push({ type: "Aluminium Stile Frame", required: frameArea, unit: "sqft", rate: 280, category: "Door Panel" });
+      requiredMaterials.push({ type: "Patch Fitting - Standard", required: 1, unit: "set", rate: 2800, category: "Hardware" });
+      requiredMaterials.push({ type: "Floor Spring - Standard", required: 1, unit: "pcs", rate: 3500, category: "Hardware" });
+      break;
+  }
+
+  if (doorType !== "glass-door" && doorType !== "stile-door" && doorType !== "glassdoor" && doorType !== "stile") {
+    requiredMaterials.push({ type: "Mortise Lock - Standard", required: 1, unit: "pcs", rate: 650, category: "Hardware" });
+    requiredMaterials.push({ type: "Door Handle - Standard", required: 1, unit: "pcs", rate: 450, category: "Hardware" });
+  } else {
+    requiredMaterials.push({ type: "Glass Door Lock", required: 1, unit: "pcs", rate: 1200, category: "Hardware" });
+    requiredMaterials.push({ type: "Glass Door Handle - Standard", required: 1, unit: "pair", rate: 850, category: "Hardware" });
+  }
+
+  requiredMaterials.push({ type: "Door Stopper - Floor Mount", required: 1, unit: "pcs", rate: 120, category: "Hardware" });
+
+  if (doorType !== "glass-door" && doorType !== "stile-door" && doorType !== "glassdoor" && doorType !== "stile") {
+    requiredMaterials.push({ type: "Door Screws", required: hingesRequired * 6, unit: "pcs", rate: 2, category: "Hardware" });
+  }
+
+  return { doorArea, framePerimeter, frameRunningFeet, requiredMaterials };
+};
+
+export type DoorTypeLocal = "flush-door" | "wpc-door" | "glass-door" | "wooden-door" | "stile-door";
+
+export const STANDARD_DOOR_SIZES_LOCAL = [
+  { label: "6'6\" x 2'6\" (Standard)", width: 2.5, height: 6.5 },
+  { label: "7' x 3' (Common)", width: 3, height: 7 },
+  { label: "7' x 3'6\" (Wide)", width: 3.5, height: 7 },
+  { label: "8' x 4' (Double Door)", width: 4, height: 8 },
+  { label: "Custom Size", width: 0, height: 0 },
+];
+
+// ----- end door helpers -----
+
 interface SelectedMaterialConfig {
   materialId: string;
   selectedShopId: string;
@@ -106,8 +224,11 @@ export default function DoorsEstimator() {
   const { shops: storeShops, materials: storeMaterials } = useData();
 
   const [step, setStep] = useState(1);
+  const [frameChoice, setFrameChoice] = useState<"with-frame" | "without-frame" | null>(null);
   const [panelType, setPanelType] = useState<"panel" | "nopanel" | null>(null);
   const [doorType, setDoorType] = useState<string | null>(null);
+  const [subOption, setSubOption] = useState<string | null>(null);
+  const [visionPanel, setVisionPanel] = useState<string | null>(null);
   const [glazingType, setGlazingType] = useState<string | null>(null);
   const [count, setCount] = useState<number | null>(1);
   const [height, setHeight] = useState<number | null>(7);
@@ -131,6 +252,16 @@ export default function DoorsEstimator() {
     if (!panelType || !doorType) return null;
     return DOOR_CONFIG[panelType].types[doorType as any];
   };
+
+  const DOOR_SUB_OPTIONS_LOCAL: Record<string, string[]> = {
+    flush: ["With Vision Panel", "Without Vision Panel"],
+    teak: ["Solid Wood", "Engineered Wood"],
+    wpc: ["Solid Core", "Hollow Core"],
+    glassdoor: ["Frameless", "Framed"],
+    glasspanel: ["Frameless", "Framed"],
+  };
+
+  const VISION_PANEL_OPTIONS_LOCAL = ["Single Glass", "Double Glass"];
 
   // Get materials for the selected door type (deduplicated by code)
   const getAvailableMaterials = () => {
@@ -349,8 +480,47 @@ const handleExportPDF = async () => {
         <Card className="border-border/50">
           <CardContent className="pt-8 min-h-96">
             <AnimatePresence mode="wait">
-              {/* STEP 1: Panel Type */}
+              {/* STEP 1: Frame Choice (added) */}
               {step === 1 && (
+                <motion.div
+                  key="step-frame"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-4"
+                >
+                  <Label className="text-lg font-semibold">Door with Frame or Without Frame?</Label>
+                  <div className="flex flex-col gap-3">
+                    <Button
+                      variant={frameChoice === "with-frame" ? "default" : "outline"}
+                      onClick={() => setFrameChoice("with-frame")}
+                      className="justify-start h-auto py-4 text-left"
+                    >
+                      <div>
+                        <div className="font-semibold">Door with Frame</div>
+                        <div className="text-xs text-muted-foreground">Recommended for traditional doors</div>
+                      </div>
+                    </Button>
+                    <Button
+                      variant={frameChoice === "without-frame" ? "default" : "outline"}
+                      onClick={() => setFrameChoice("without-frame")}
+                      className="justify-start h-auto py-4 text-left"
+                    >
+                      <div>
+                        <div className="font-semibold">Door without Frame (Glass)</div>
+                        <div className="text-xs text-muted-foreground">Used for frameless or glass doors</div>
+                      </div>
+                    </Button>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-6">
+                    <Button disabled={!frameChoice} onClick={() => setStep(2)}>
+                      Next <ChevronRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* STEP 2: Panel Type */}
+              {step === 2 && (
                 <motion.div
                   key="step1"
                   initial={{ opacity: 0 }}
@@ -391,15 +561,15 @@ const handleExportPDF = async () => {
                     </Button>
                   </div>
                   <div className="flex justify-end gap-2 pt-6">
-                    <Button disabled={!panelType} onClick={() => setStep(2)}>
+                    <Button disabled={!panelType} onClick={() => setStep(3)}>
                       Next <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </motion.div>
               )}
 
-              {/* STEP 2: Door Type */}
-              {step === 2 && (
+              {/* STEP 3: Door Type */}
+              {step === 3 && (
                 <motion.div
                   key="step2"
                   initial={{ opacity: 0 }}
@@ -412,7 +582,12 @@ const handleExportPDF = async () => {
                       <Button
                         key={opt.value}
                         variant={doorType === opt.value ? "default" : "outline"}
-                        onClick={() => setDoorType(opt.value)}
+                        onClick={() => {
+                          setDoorType(opt.value);
+                          setSubOption(null);
+                          setVisionPanel(null);
+                          setGlazingType(null);
+                        }}
                         className="justify-start h-auto py-3"
                       >
                         {opt.label}
@@ -420,15 +595,15 @@ const handleExportPDF = async () => {
                     ))}
                   </div>
                   <div className="flex justify-between gap-2 pt-6">
-                    <Button variant="outline" onClick={() => setStep(1)}>
+                    <Button variant="outline" onClick={() => setStep(2)}>
                       <ChevronLeft className="mr-2 h-4 w-4" /> Back
                     </Button>
                     <Button disabled={!doorType} onClick={() => {
                       const config = getCurrentDoorConfig();
                       if (config?.requiresGlazing) {
-                        setStep(3);
-                      } else {
                         setStep(4);
+                      } else {
+                        setStep(5);
                       }
                     }}>
                       Next <ChevronRight className="ml-2 h-4 w-4" />
@@ -437,44 +612,63 @@ const handleExportPDF = async () => {
                 </motion.div>
               )}
 
-              {/* STEP 3: Glazing (if applicable) */}
-              {step === 3 && getCurrentDoorConfig()?.requiresGlazing && (
+              {/* STEP 4: Sub Option */}
+              {step === 4 && doorType && (
                 <motion.div
-                  key="step3"
+                  key="step-suboption"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="space-y-4"
                 >
-                  <Label className="text-lg font-semibold">Select Glazing Type</Label>
-                  <div className="grid gap-3">
-                    <Button
-                      variant={glazingType === "single" ? "default" : "outline"}
-                      onClick={() => setGlazingType("single")}
-                      className="justify-start h-auto py-3"
-                    >
-                      Single Glazing
-                    </Button>
-                    <Button
-                      variant={glazingType === "double" ? "default" : "outline"}
-                      onClick={() => setGlazingType("double")}
-                      className="justify-start h-auto py-3"
-                    >
-                      Double Glazing
-                    </Button>
+                  <Label className="text-lg font-semibold">Select Sub Option:</Label>
+                  <div className="flex flex-col gap-2">
+                    {(DOOR_SUB_OPTIONS_LOCAL[doorType] || []).map((opt) => (
+                      <Button
+                        key={opt}
+                        onClick={() => {
+                          setSubOption(opt);
+                          setVisionPanel(null);
+                        }}
+                        className={`w-full text-black ${subOption === opt ? "bg-cyan-500" : "bg-white"}`}
+                      >
+                        {opt}
+                      </Button>
+                    ))}
                   </div>
+
+                  {doorType === "flush" && (
+                    <div className="mt-4">
+                      <p className="font-semibold text-white mb-2">Vision Panel Type:</p>
+                      <div className="flex flex-col gap-2">
+                        {VISION_PANEL_OPTIONS_LOCAL.map((opt) => (
+                          <Button
+                            key={opt}
+                            onClick={() => setVisionPanel(opt)}
+                            className={`w-full text-black ${visionPanel === opt ? "bg-cyan-500" : "bg-white"}`}
+                          >
+                            {opt}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex justify-between gap-2 pt-6">
-                    <Button variant="outline" onClick={() => setStep(2)}>
+                    <Button variant="outline" onClick={() => setStep(3)}>
                       <ChevronLeft className="mr-2 h-4 w-4" /> Back
                     </Button>
-                    <Button disabled={!glazingType} onClick={() => setStep(4)}>
+                    <Button
+                      onClick={() => setStep(5)}
+                      disabled={!subOption || (doorType === "flush" && subOption === "With Vision Panel" && !visionPanel)}
+                    >
                       Next <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </motion.div>
               )}
 
-              {/* STEP 4: Dimensions */}
-              {step === 4 && (
+              {/* STEP 5: Dimensions */}
+              {step === 5 && (
                 <motion.div
                   key="step4"
                   initial={{ opacity: 0 }}
@@ -556,12 +750,12 @@ const handleExportPDF = async () => {
                   )}
 
                   <div className="flex justify-between gap-2 pt-6">
-                    <Button variant="outline" onClick={() => setStep(getCurrentDoorConfig()?.requiresGlazing ? 3 : 2)}>
+                    <Button variant="outline" onClick={() => setStep(getCurrentDoorConfig()?.requiresGlazing ? 4 : 3)}>
                       <ChevronLeft className="mr-2 h-4 w-4" /> Back
                     </Button>
                     <Button
                       disabled={!count || !height || !width || (getCurrentDoorConfig()?.requiresGlazing && (!glassHeight || !glassWidth))}
-                      onClick={() => setStep(5)}
+                      onClick={() => setStep(6)}
                     >
                       Next <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -569,8 +763,8 @@ const handleExportPDF = async () => {
                 </motion.div>
               )}
 
-              {/* STEP 5: Material Selection */}
-              {step === 5 && (
+              {/* STEP 6: Material Selection */}
+              {step === 6 && (
                 <motion.div
                   key="step5"
                   initial={{ opacity: 0 }}
@@ -647,24 +841,24 @@ const handleExportPDF = async () => {
                     })}
                   </div>
 
-                  <div className="flex justify-between gap-2 pt-6">
-                    <Button variant="outline" onClick={() => setStep(4)}>
-                      <ChevronLeft className="mr-2 h-4 w-4" /> Back
-                    </Button>
-                    <Button
-                      disabled={selectedMaterials.length === 0}
-                      onClick={() => setStep(6)}
-                    >
-                     Next <ChevronRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
+                    <div className="flex justify-between gap-2 pt-6">
+                      <Button variant="outline" onClick={() => setStep(5)}>
+                        <ChevronLeft className="mr-2 h-4 w-4" /> Back
+                      </Button>
+                      <Button
+                        disabled={selectedMaterials.length === 0}
+                        onClick={() => setStep(7)}
+                      >
+                       Next <ChevronRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
                 </motion.div>
               )}
 
 
-              {/* STEP 6: Required Materials Check */}
-{/* STEP 6: Required Materials Check */}
-{step === 6 && (
+              {/* STEP 7: Required Materials Check */}
+{/* STEP 7: Required Materials Check */}
+{step === 7 && (
   <motion.div
     key="step6-required"
     initial={{ opacity: 0 }}
@@ -767,12 +961,12 @@ const handleExportPDF = async () => {
     </div>
 
     <div className="flex justify-between gap-2 pt-6">
-      <Button variant="outline" onClick={() => setStep(5)}>
+      <Button variant="outline" onClick={() => setStep(6)}>
         <ChevronLeft className="mr-2 h-4 w-4" /> Back
       </Button>
       <Button
         disabled={selectedMaterials.length === 0}
-        onClick={() => setStep(7)}
+        onClick={() => setStep(8)}
       >
          Generate BOQ  <ChevronRight className="ml-2 h-4 w-4" />
       </Button>
@@ -783,7 +977,7 @@ const handleExportPDF = async () => {
 
                {/* STEP 7: BOQ Review */}
              {/* STEP 7: Final BOQ */}
-{step === 7 && (
+{step === 8 && (
   <motion.div
     key="step7"
     initial={{ opacity: 0 }}

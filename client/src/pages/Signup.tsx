@@ -9,10 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Building2, User, ChevronRight, CheckCircle2 } from "lucide-react";
 import { useData } from "@/lib/store";
+import { useAuth } from "@/lib/auth-context";
 
 export default function Signup() {
   const [, setLocation] = useLocation();
-  const { login } = useData();
+  const { login: localLogin } = useData();
+  const { signup } = useAuth();
   const [step, setStep] = useState(1);
   const [userType, setUserType] = useState<"client" | "supplier">("client");
   
@@ -31,8 +33,9 @@ export default function Signup() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate Signup & Login
-    login({
+    // Call server signup to create token, and also set local app user
+    signup(formData.email, 'password123', userType === 'client' ? 'user' : 'supplier').catch(() => {});
+    localLogin({
       id: Math.random().toString(),
       name: formData.name,
       email: formData.email,

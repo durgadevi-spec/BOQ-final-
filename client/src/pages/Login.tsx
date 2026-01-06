@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Lock, User, Hammer, Building2 } from "lucide-react";
 import { useData, Role } from "@/lib/store";
+import { useAuth } from "@/lib/auth-context";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login } = useData();
+  const { login: localLogin } = useData();
+  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("user");
@@ -22,7 +24,10 @@ export default function Login() {
     
     // Simulate API call
     setTimeout(() => {
-      login({
+      // use server auth to get token + user
+      login(email, 'password123', role).catch(() => {});
+      // also set local app user for UI state
+      localLogin({
         id: "1",
         name: email.split("@")[0] || "User",
         email: email,

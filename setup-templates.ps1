@@ -21,8 +21,8 @@ if ($loginRes.StatusCode -eq 200) {
   
   # Create templates
   $templates = @(
-    @{ name = "Industrial Paint"; code = "TPL-PAINT-001"; category = "Paint" }
-    @{ name = "Hydraulic Cement"; code = "TPL-CEMENT-001"; category = "Concrete" }
+    @{ name = "Industrial Paint"; code = "TPL-PAINT-001"; category = "Paint" },
+    @{ name = "Hydraulic Cement"; code = "TPL-CEMENT-001"; category = "Concrete" },
     @{ name = "Stainless Steel Bolt"; code = "TPL-BOLT-M10"; category = "Fasteners" }
   )
   
@@ -38,11 +38,11 @@ if ($loginRes.StatusCode -eq 200) {
       -SkipHttpErrorCheck
     
     if ($createRes.StatusCode -eq 201) {
-      Write-Host "✓ Created: $($template.name)" -ForegroundColor Green
+      Write-Host "Created: $($template.name)" -ForegroundColor Green
     } elseif ($createRes.StatusCode -eq 409) {
-      Write-Host "⚠ Already exists: $($template.name)" -ForegroundColor Yellow
+      Write-Host "Already exists: $($template.name)" -ForegroundColor Yellow
     } else {
-      Write-Host "✗ Error: $($createRes.StatusCode)" -ForegroundColor Red
+      Write-Host "Error: $($createRes.StatusCode)" -ForegroundColor Red
       Write-Host $createRes.Content
     }
   }
@@ -54,8 +54,8 @@ if ($loginRes.StatusCode -eq 200) {
     -Headers @{ Authorization = "Bearer $token" }
   
   $templates = ($getRes.Content | ConvertFrom-Json).templates
-  Write-Host "✓ Found $($templates.Count) templates" -ForegroundColor Green
+  Write-Host "Found $($templates.Count) templates" -ForegroundColor Green
   $templates | ForEach-Object { Write-Host "  - $($_.name)" }
 } else {
-  Write-Host "✗ Login failed" -ForegroundColor Red
+  Write-Host "Login failed" -ForegroundColor Red
 }

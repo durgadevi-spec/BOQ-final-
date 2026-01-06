@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -15,24 +16,18 @@ import {
   Menu,
   X
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [estSearch, setEstSearch] = useState("");
 
   // Define navigation items based on role
   const getNavItems = () => {
     const items = [
-      // Common or Dashboard
-      { 
-        label: "Dashboard", 
-        href: "/", 
-        icon: LayoutDashboard,
-        roles: ["admin", "supplier", "purchase_team", "software_team", "user"] 
-      },
       // Estimator - User (Client) & Admin
       { 
         label: "Estimator", 
@@ -40,13 +35,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         icon: Calculator,
         roles: ["admin", "user", "software_team"] 
       },
-      // Materials - Purchase Team, Admin, Software, Supplier (View only?)
-      { 
-        label: "Materials", 
-        href: "/materials", 
-        icon: Package,
-        roles: ["admin", "purchase_team", "software_team", "supplier"] 
-      },
+      // Admin Dashboard shortcuts (open AdminDashboard tabs)
+      { label: "Manage Materials", href: "/admin/dashboard?tab=materials", roles: ["admin","software_team","purchase_team"] },
+      { label: "Categories", href: "/admin/dashboard?tab=categories", roles: ["admin","software_team","purchase_team"] },
+      { label: "Manage Shops", href: "/admin/dashboard?tab=shops", roles: ["admin","software_team","supplier","purchase_team"] },
+      { label: "Approvals", href: "/admin/dashboard?tab=approvals", roles: ["admin","software_team","purchase_team"] },
+      { label: "Material Approvals", href: "/admin/dashboard?tab=material-approvals", roles: ["admin","software_team","purchase_team"] },
+      { label: "Messages", href: "/admin/dashboard?tab=messages", roles: ["admin","software_team","purchase_team"] },
       // Orders/Purchases
       { 
         label: "Orders", 
@@ -89,6 +84,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = getNavItems();
 
+  const estimators = [
+    { title: "Civil Wall", href: "/estimators/civil-wall" },
+    { title: "Doors", href: "/estimators/doors" },
+    { title: "Flooring", href: "/estimators/flooring" },
+    { title: "Electrical", href: "/estimators/electrical" },
+    { title: "Plumbing", href: "/estimators/plumbing" },
+    { title: "Fire-Fighting", href: "/estimators/fire-fighting" },
+    { title: "Painting", href: "/estimators/painting" },
+    { title: "Blinds", href: "/estimators/blinds" },
+  ];
+
+  const filteredEstimators = useMemo(() => {
+    if (!estSearch.trim()) return estimators;
+    const q = estSearch.toLowerCase();
+    return estimators.filter((e) => e.title.toLowerCase().includes(q));
+  }, [estSearch]);
+
   const SidebarContent = () => (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="p-6 border-b border-sidebar-border">
@@ -103,27 +115,53 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = location === item.href;
-          return (
-            <Link 
-              key={item.href} 
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors",
-                isActive 
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md" 
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-              onClick={() => setIsMobileOpen(false)}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+        <div className="mb-2">
+          <Input
+            placeholder="Search estimators..."
+            value={estSearch}
+            onChange={(e) => setEstSearch(e.target.value)}
+            className="w-full"
+          />
+          <div className="mt-2 grid gap-1">
+            {filteredEstimators.slice(0, 6).map((e) => (
+              <Link
+                key={e.href}
+                href={e.href}
+                className="text-sm px-2 py-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                onClick={() => setIsMobileOpen(false)}
+              >
+                {e.title}
+              </Link>
+            ))}
+            {filteredEstimators.length === 0 && (
+              <div className="text-xs text-sidebar-foreground/60">No estimators</div>
+            )}
+          </div>
+        </div>
+
+        <nav className="space-y-1">
+          {navItems.map((item) => {
+            const isActive = location === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+                onClick={() => setIsMobileOpen(false)}
+              >
+                {/* no icon on custom admin links to keep compact */}
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       <div className="p-4 border-t border-sidebar-border bg-sidebar-accent/20">
         <div className="flex items-center gap-3 mb-4 px-2">

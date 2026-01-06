@@ -10,6 +10,46 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Seed default material templates on startup (best-effort)
+  try {
+    // dynamic import to avoid circular deps during startup
+    const { seedMaterialTemplates } = await import('./seed-templates');
+    await seedMaterialTemplates();
+  } catch (err) {
+    console.warn('[seed] Could not run material template seed:', err?.message || err);
+  }
+
+  // Seed category and subcategory tables on startup
+  try {
+    const { seedMaterialCategories } = await import('./seed-categories');
+    await seedMaterialCategories();
+  } catch (err) {
+    console.warn('[seed] Could not run category seed:', err?.message || err);
+  }
+  // Ensure messages table exists (create if missing) to avoid runtime errors in dev
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        sender_name TEXT NOT NULL,
+        sender_email TEXT,
+        sender_role TEXT,
+        message TEXT NOT NULL,
+        info TEXT,
+        is_read BOOLEAN DEFAULT FALSE,
+        sent_at TIMESTAMPTZ DEFAULT now(),
+        created_at TIMESTAMPTZ DEFAULT now()
+      )
+    `);
+    await query(`CREATE INDEX IF NOT EXISTS idx_messages_sender_role ON messages (sender_role)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at)`);
+  } catch (err) {
+    console.warn('[migrations] ensure messages table failed (continuing):', err?.message || err);
+  }
+
+  // In-memory fallback storage for messages when DB is unreachable (development only)
+  let inMemoryMessages: any[] = [];
+  let inMemoryMessagesEnabled = false;
   // put application routes here
   // prefix all routes with /api
 
@@ -425,8 +465,133 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/material-templates - Create a new material template (Admin/Software Team only)
-  app.post('/api/material-templates', authMiddleware, requireRole('admin', 'software_team'), async (req: Request, res: Response) => {
+  // GET /api/material-categories - List categories created by admin/software_team/purchase_team
+  app.get('/api/material-categories', async (_req, res) => {
+    try {
+      // Return only categories created by admin, software_team, or purchase_team
+      const result = await query(`
+        SELECT DISTINCT name FROM material_categories
+        WHERE created_by IS NOT NULL
+        ORDER BY name ASC
+      `);
+      const categories = result.rows.map(row => row.name).filter(Boolean);
+      res.json({ categories });
+    } catch (err) {
+      console.error('/api/material-categories error', err);
+      res.status(500).json({ message: 'failed to list categories' });
+    }
+  });
+
+  // GET /api/material-subcategories/:category - List subcategories created by admin/software_team/purchase_team
+  app.get('/api/material-subcategories/:category', async (req: Request, res: Response) => {
+    try {
+      const { category } = req.params;
+      // Return only subcategories created by admin, software_team, or purchase_team
+      const result = await query(`
+        SELECT DISTINCT name FROM material_subcategories 
+        WHERE category = $1 AND created_by IS NOT NULL
+        ORDER BY name ASC
+      `, [category]);
+      const subcategories = result.rows.map(row => row.name).filter(Boolean);
+      res.json({ subcategories });
+    } catch (err) {
+      console.error('/api/material-subcategories error', err);
+      res.status(500).json({ message: 'failed to list subcategories' });
+    }
+  });
+
+  // POST /api/categories - Create a new category (Admin/Software Team only)
+  app.post('/api/categories', authMiddleware, requireRole('admin', 'software_team'), async (req: Request, res: Response) => {
+    try {
+      const { name } = req.body;
+
+      if (!name || !name.trim()) {
+        res.status(400).json({ message: 'Category name is required' });
+        return;
+      }
+
+      const id = randomUUID();
+      const userId = (req as any).user?.id;
+      const result = await query(
+        `INSERT INTO material_categories (id, name, created_by) 
+         VALUES ($1, $2, $3) 
+         RETURNING *`,
+        [id, name.trim(), userId || null]
+      );
+
+      res.status(201).json({ category: result.rows[0] });
+    } catch (err: any) {
+      console.error('/api/categories error', err);
+      if (err.code === '23505') {
+        res.status(409).json({ message: 'Category already exists' });
+      } else {
+        res.status(500).json({ message: 'failed to create category', error: err.message });
+      }
+    }
+  });
+
+  // POST /api/subcategories - Create a new subcategory (Admin/Software Team only)
+  app.post('/api/subcategories', authMiddleware, requireRole('admin', 'software_team'), async (req: Request, res: Response) => {
+    try {
+      const { name, category } = req.body;
+
+      if (!name || !name.trim() || !category || !category.trim()) {
+        res.status(400).json({ message: 'Subcategory name and parent category are required' });
+        return;
+      }
+
+      const id = randomUUID();
+      const userId = (req as any).user?.id;
+      const result = await query(
+        `INSERT INTO material_subcategories (id, name, category, created_by) 
+         VALUES ($1, $2, $3, $4) 
+         RETURNING *`,
+        [id, name.trim(), category.trim(), userId || null]
+      );
+
+      res.status(201).json({ subcategory: result.rows[0] });
+    } catch (err: any) {
+      console.error('/api/subcategories error', err);
+      if (err.code === '23505') {
+        res.status(409).json({ message: 'Subcategory already exists for this category' });
+      } else {
+        res.status(500).json({ message: 'failed to create subcategory', error: err.message });
+      }
+    }
+  });
+
+  // GET /api/categories - List all categories created by admin (including seeded ones)
+  app.get('/api/categories', async (_req, res) => {
+    try {
+      const result = await query(`
+        SELECT * FROM material_categories 
+        ORDER BY created_at DESC
+      `);
+      
+      res.json({ categories: result.rows.map(r => r.name) });
+    } catch (err) {
+      console.error('/api/categories error', err);
+      res.status(500).json({ message: 'failed to list categories' });
+    }
+  });
+
+  // GET /api/subcategories-admin - List all subcategories for admin (from DB)
+  app.get('/api/subcategories-admin', async (_req, res) => {
+    try {
+      const result = await query(`
+        SELECT * FROM material_subcategories 
+        ORDER BY category ASC, name ASC
+      `);
+      
+      res.json({ subcategories: result.rows });
+    } catch (err) {
+      console.error('/api/subcategories-admin error', err);
+      res.status(500).json({ message: 'failed to list subcategories' });
+    }
+  });
+
+  // POST /api/material-templates - Create a new material template (Admin/Software Team/Purchase Team)
+  app.post('/api/material-templates', authMiddleware, requireRole('admin', 'software_team', 'purchase_team'), async (req: Request, res: Response) => {
     try {
       const { name, code, category } = req.body;
 
@@ -451,6 +616,40 @@ export async function registerRoutes(
       } else {
         res.status(500).json({ message: 'failed to create material template' });
       }
+    }
+  });
+
+  // DELETE /api/material-templates/:id - Delete a material template (Admin/Software Team only)
+  app.delete('/api/material-templates/:id', authMiddleware, requireRole('admin', 'software_team'), async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      
+      console.log('[DELETE /api/material-templates/:id] Attempting to delete template:', id);
+      
+      // First, delete all material_submissions that reference this template
+      const submissionsDeleted = await query(
+        'DELETE FROM material_submissions WHERE template_id = $1',
+        [id]
+      );
+      console.log('[DELETE /api/material-templates/:id] Deleted submissions:', submissionsDeleted.rowCount);
+      
+      // Then delete the template itself
+      const result = await query(
+        'DELETE FROM material_templates WHERE id = $1 RETURNING *',
+        [id]
+      );
+
+      console.log('[DELETE /api/material-templates/:id] Deleted template rows:', result.rowCount);
+      
+      if (result.rowCount === 0) {
+        res.status(404).json({ message: 'Template not found' });
+        return;
+      }
+
+      res.json({ message: 'Template deleted successfully', template: result.rows[0] });
+    } catch (err: any) {
+      console.error('/api/material-templates/:id DELETE error', err);
+      res.status(500).json({ message: 'failed to delete template: ' + (err.message || 'unknown error') });
     }
   });
 
@@ -482,7 +681,7 @@ export async function registerRoutes(
   });
 
   // GET /api/material-submissions-pending-approval - List pending material submissions
-  app.get('/api/material-submissions-pending-approval', authMiddleware, requireRole('admin', 'software_team'), async (_req, res) => {
+  app.get('/api/material-submissions-pending-approval', authMiddleware, requireRole('admin', 'software_team', 'purchase_team'), async (_req, res) => {
     try {
       const result = await query(`
         SELECT 
@@ -521,7 +720,7 @@ export async function registerRoutes(
   });
 
   // POST /api/material-submissions/:id/approve - Approve a material submission
-  app.post('/api/material-submissions/:id/approve', authMiddleware, requireRole('admin', 'software_team'), async (req: Request, res: Response) => {
+  app.post('/api/material-submissions/:id/approve', authMiddleware, requireRole('admin', 'software_team', 'purchase_team'), async (req: Request, res: Response) => {
     try {
       const id = req.params.id;
 
@@ -585,11 +784,13 @@ export async function registerRoutes(
     try {
       const userId = (req as any).user.id;
 
-      // Get the shop(s) associated with this user
+      // Get the shop(s) owned by this user (fallback to shops.owner_id)
+      console.log('[supplier/my-submissions] fetching shops for user:', userId);
       const userShopsResult = await query(
-        `SELECT shop_id FROM user_shops WHERE user_id = $1`,
+        `SELECT id as shop_id FROM shops WHERE owner_id = $1`,
         [userId]
       );
+      console.log('[supplier/my-submissions] userShopsResult rows:', userShopsResult.rows.length);
 
       if (userShopsResult.rows.length === 0) {
         res.json({ submissions: [] });
@@ -599,7 +800,10 @@ export async function registerRoutes(
       const shopIds = userShopsResult.rows.map((r: any) => r.shop_id);
 
       // Get all submissions for this supplier's shops
-      const result = await query(`
+      console.log('[supplier/my-submissions] shopIds:', shopIds);
+      let result;
+      try {
+        result = await query(`
         SELECT 
           ms.id,
           ms.template_id,
@@ -622,6 +826,10 @@ export async function registerRoutes(
         WHERE ms.shop_id = ANY($1::uuid[])
         ORDER BY ms.created_at DESC
       `, [shopIds]);
+      } catch (sqlErr) {
+        console.error('[supplier/my-submissions] SQL error', sqlErr);
+        throw sqlErr;
+      }
 
       const submissions = result.rows.map((r: any) => ({
         id: r.id,
@@ -647,7 +855,7 @@ export async function registerRoutes(
   });
 
   // POST /api/material-submissions/:id/reject - Reject a material submission
-  app.post('/api/material-submissions/:id/reject', authMiddleware, requireRole('admin', 'software_team'), async (req: Request, res: Response) => {
+  app.post('/api/material-submissions/:id/reject', authMiddleware, requireRole('admin', 'software_team', 'purchase_team'), async (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       const reason = req.body?.reason || null;
@@ -661,6 +869,135 @@ export async function registerRoutes(
     } catch (err) {
       console.error('/api/material-submissions/:id/reject error', err);
       res.status(500).json({ message: 'failed to reject material submission' });
+    }
+  });
+
+  // ===== MESSAGES API =====
+
+  // POST /api/messages - Create a new message
+  app.post('/api/messages', authMiddleware, async (req: Request, res: Response) => {
+    const { senderName, senderEmail: bodySenderEmail, message, info } = req.body;
+    const user = (req as any).user;
+
+    if (!senderName || !message) {
+      res.status(400).json({ message: 'Sender name and message are required' });
+      return;
+    }
+
+    // Prefer authenticated username/email if available
+    const senderEmail = user?.username || bodySenderEmail || null;
+
+    try {
+      const result = await query(
+        `INSERT INTO messages (sender_name, sender_email, sender_role, message, info, is_read, sent_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, false, now(), now())
+         RETURNING id, sender_name, sender_email, sender_role, message, info, is_read, sent_at, created_at`,
+        [senderName, senderEmail, user?.role || 'user', message, info || null]
+      );
+
+      return res.status(201).json({ message: result.rows[0] });
+    } catch (err: any) {
+      console.error('/api/messages POST error', err);
+
+      // If DB is down or table missing, enable in-memory fallback
+      inMemoryMessagesEnabled = true;
+      const now = new Date().toISOString();
+      const fallbackMsg = {
+        id: randomUUID(),
+        sender_name: senderName,
+        sender_email: senderEmail,
+        sender_role: (user?.role) || 'user',
+        message,
+        info: info || null,
+        is_read: false,
+        sent_at: now,
+        created_at: now,
+      };
+      inMemoryMessages.unshift(fallbackMsg);
+      return res.status(201).json({ message: fallbackMsg, fallback: true });
+    }
+  });
+
+  // GET /api/messages - Get messages. Admin/software/purchase get all; others get only their own messages
+  app.get('/api/messages', authMiddleware, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    try {
+      if (user && (user.role === 'admin' || user.role === 'software_team' || user.role === 'purchase_team')) {
+        const result = await query(
+          `SELECT id, sender_name, sender_email, sender_role, message, info, is_read, sent_at, created_at
+           FROM messages
+           ORDER BY created_at DESC`
+        );
+        return res.json({ messages: result.rows });
+      }
+
+      // For regular users and suppliers, return only messages they sent (match by username/email if present)
+      const username = (user && user.username) ? user.username : null;
+      if (!username) {
+        return res.json({ messages: [] });
+      }
+
+      const result = await query(
+        `SELECT id, sender_name, sender_email, sender_role, message, info, is_read, sent_at, created_at
+         FROM messages
+         WHERE sender_email = $1
+         ORDER BY created_at DESC`,
+        [username]
+      );
+
+      return res.json({ messages: result.rows });
+    } catch (err: any) {
+      console.error('/api/messages GET error', err);
+
+      // DB failed: return in-memory fallback if enabled
+      inMemoryMessagesEnabled = true;
+      if (user && (user.role === 'admin' || user.role === 'software_team' || user.role === 'purchase_team')) {
+        return res.json({ messages: inMemoryMessages });
+      }
+      const username = (user && user.username) ? user.username : null;
+      if (!username) return res.json({ messages: [] });
+      const filtered = inMemoryMessages.filter((m) => m.sender_email === username);
+      return res.json({ messages: filtered });
+    }
+  });
+
+  // DELETE /api/messages/:id - Delete a message (admins/teams can delete any; owners can delete their own)
+  app.delete('/api/messages/:id', authMiddleware, async (req: Request, res: Response) => {
+    const id = req.params.id;
+    const user = (req as any).user;
+
+    try {
+      if (user && (user.role === 'admin' || user.role === 'software_team' || user.role === 'purchase_team')) {
+        const result = await query(`DELETE FROM messages WHERE id = $1 RETURNING id`, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Message not found' });
+        return res.json({ message: 'Message deleted successfully' });
+      }
+
+      // Regular users can delete only their own messages (match by sender_email)
+      const username = user?.username || null;
+      if (!username) return res.status(403).json({ message: 'Forbidden' });
+
+      const result = await query(`DELETE FROM messages WHERE id = $1 AND sender_email = $2 RETURNING id`, [id, username]);
+      if (result.rows.length === 0) return res.status(404).json({ message: 'Message not found or not owned by you' });
+      res.json({ message: 'Message deleted successfully' });
+    } catch (err: any) {
+      console.error('/api/messages DELETE error', err);
+
+      // DB failed: attempt to delete from in-memory fallback
+      inMemoryMessagesEnabled = true;
+      const userEmail = user?.username || null;
+      if (user && (user.role === 'admin' || user.role === 'software_team' || user.role === 'purchase_team')) {
+        const idx = inMemoryMessages.findIndex((m) => m.id === id);
+        if (idx === -1) return res.status(404).json({ message: 'Message not found' });
+        inMemoryMessages.splice(idx, 1);
+        return res.json({ message: 'Message deleted successfully (fallback)' });
+      }
+      if (!userEmail) return res.status(403).json({ message: 'Forbidden' });
+      const idx = inMemoryMessages.findIndex((m) => m.id === id && m.sender_email === userEmail);
+      if (idx === -1) return res.status(404).json({ message: 'Message not found or not owned by you' });
+      inMemoryMessages.splice(idx, 1);
+      return res.json({ message: 'Message deleted successfully (fallback)' });
     }
   });
 

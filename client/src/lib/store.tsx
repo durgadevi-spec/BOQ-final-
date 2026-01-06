@@ -28,6 +28,8 @@ interface DataContextType {
   rejectShop?: (id: string, reason?: string|null) => Promise<any>;
   approveMaterial?: (id: string) => Promise<any>;
   rejectMaterial?: (id: string, reason?: string|null) => Promise<any>;
+  addSupportMessage?: (senderName: string, message: string, info?: string) => Promise<void>;
+  deleteMessage?: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -68,6 +70,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const pm = await getJSON('/materials-pending-approval');
         if (mounted && pm?.materials) setMaterialApprovalRequests(pm.materials);
       } catch (e) { console.warn('load pending materials failed', e); }
+      // load support messages
+      try {
+        const sm = await getJSON('/messages');
+        if (mounted && sm?.messages) setSupportMessages(sm.messages);
+      } catch (e) { console.warn('load support messages failed', e); }
     })();
     return () => { mounted = false };
   }, []);
@@ -257,6 +264,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return data?.material;
   };
 
+  const addSupportMessage = async (senderName: string, message: string, info?: string) => {
+    try {
+      const data = await postJSON('/messages', {
+        senderName,
+        message,
+        info: info || null,
+      });
+      if (data?.message) {
+        setSupportMessages((p) => [data.message, ...p]);
+      }
+    } catch (e) {
+      console.warn('addSupportMessage failed', e);
+      throw e;
+    }
+  };
+
+  const deleteMessage = async (id: string) => {
+    try {
+      const res = await apiFetch(`/messages/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSupportMessages((p) => p.filter((m: any) => m.id !== id));
+        return;
+      }
+      throw new Error('Failed to delete message');
+    } catch (e) {
+      console.warn('deleteMessage failed', e);
+      throw e;
+    }
+  };
+
   const contextValue: DataContextType = {
     user,
     login,
@@ -278,6 +315,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     rejectMaterial,
     submitShopForApproval,
     submitMaterialForApproval,
+    addSupportMessage,
+    deleteMessage,
   };
 
   return (
