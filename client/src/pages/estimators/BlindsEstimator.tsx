@@ -16,8 +16,19 @@ const ctintLogo = "/image.png";
 export default function BlindsEstimator() {
   // Pulling directly from your global store
   const { shops: storeShops, materials: storeMaterials } = useData();
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
   
   const [step, setStep] = useState(1);
+  
+  // Final Invoice States
+  const [finalCustomerName, setFinalCustomerName] = useState<string>("");
+  const [finalTerms, setFinalTerms] = useState<string>("50% Advance and 50% on Completion");
+  const [finalBillNo, setFinalBillNo] = useState<string>("");
+  const [finalBillDate, setFinalBillDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [finalDueDate, setFinalDueDate] = useState<string>("");
+  const [finalShopDetails, setFinalShopDetails] = useState<string>("Primary Warehouse\nChennai District");
   
   // Selection States
   const [blindType, setBlindType] = useState<string>("Roller Blinds");
@@ -168,7 +179,7 @@ export default function BlindsEstimator() {
                   </div>
                   <div className="flex justify-between pt-6">
                     <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-                    <Button disabled={selectedMaterials.length === 0} onClick={() => setStep(3)}>Next: Review</Button>
+                    <Button onClick={() => setStep(3)}>Next: Review</Button>
                   </div>
                 </motion.div>
               )}
@@ -234,44 +245,104 @@ export default function BlindsEstimator() {
               {/* STEP 5: FINAL INVOICE */}
               {step === 5 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                  {/* ... (Manual Inputs for Bill No, Customer Name, etc. same as Doors Estimator) ... */}
+                  {/* Manual Inputs */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><Label>Bill No</Label><Input value={finalBillNo} onChange={e => setFinalBillNo(e.target.value)} /></div>
+                    <div><Label>Bill Date</Label><Input type="date" value={finalBillDate} onChange={e => setFinalBillDate(e.target.value)} /></div>
+                    <div><Label>Due Date</Label><Input type="date" value={finalDueDate} onChange={e => setFinalDueDate(e.target.value)} /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><Label>Customer Name</Label><Input value={finalCustomerName} onChange={e => setFinalCustomerName(e.target.value)} /></div>
+                    <div><Label>Terms & Conditions</Label><Input value={finalTerms} onChange={e => setFinalTerms(e.target.value)} /></div>
+                  </div>
+
+                  {/* MATERIAL DESCRIPTION INPUT */}
+                  <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                    <Label className="font-semibold">Material Description Entry</Label>
+                    <select className="w-full border rounded px-3 py-2" value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(e.target.value)}>
+                      <option value="">Select Material</option>
+                      {getMaterialsWithDetails().map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+                    </select>
+                    {selectedMaterialId && (<Input placeholder="Enter description for selected material" value={materialDescriptions[selectedMaterialId] || ""} onChange={(e) => setMaterialDescriptions((prev) => ({...prev,[selectedMaterialId]: e.target.value,}))} />)}
+                  </div>
+
                   <div id="boq-final-pdf" style={{ width: "210mm", minHeight: "297mm", padding: "20mm", background: "#fff", color: "#000", fontFamily: "Arial" }}>
-                     {/* Invoice Header */}
-                     <div className="flex justify-between items-start mb-10">
-                        <img src={ctintLogo} style={{ height: 60 }} />
-                        <div className="text-right">
-                           <h1 className="text-4xl font-bold text-gray-800">INVOICE</h1>
-                           <p>Bill No: {finalBillNo}</p>
-                        </div>
+                     {/* HEADER */}
+                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
+                       {/* LEFT */}
+                       <div style={{ width: "55%", lineHeight: 1.5, display: "flex", gap: 12 }}>
+                         <img src={ctintLogo} alt="Logo" style={{ height: 56, flexShrink: 0 }} />
+                         <div>
+                           <strong>Concept Trunk Interiors</strong><br />
+                           12/36A, Indira Nagar<br />
+                           Medavakkam<br />
+                           Chennai – 600100<br />
+                           GSTIN: 33ASOPS5560M1Z1
+
+                           <br /><br />
+
+                           <strong>Bill From</strong><br />
+                           <pre style={{ margin: 0, fontFamily: "Arial", whiteSpace: "pre-wrap" }}>
+                             {finalShopDetails || "Primary Warehouse\nChennai District"}
+                           </pre>
+                         </div>
+                       </div>
+
+                       {/* RIGHT */}
+                       <div style={{ width: "40%", lineHeight: 1.6 }}>
+                         <div><strong>Bill Date</strong> : {finalBillDate}</div>
+                         <div><strong>Due Date</strong> : {finalDueDate}</div>
+                         <div style={{ marginTop: 6 }}>
+                           <strong>Terms</strong> : {finalTerms}
+                         </div>
+                         <div style={{ marginTop: 6 }}>
+                           <strong>Customer Name</strong> : {finalCustomerName}
+                         </div>
+                       </div>
                      </div>
-                     
-                     {/* Materials Table */}
-                     <table className="w-full border-collapse mt-10">
-                        <thead className="bg-black text-white">
-                           <tr><th className="p-2 text-left">Item</th><th className="p-2">Qty</th><th className="p-2">Rate</th><th className="p-2 text-right">Total</th></tr>
+
+                     {/* TABLE */}
+                     <table style={{ width: "100%", marginTop: 20, borderCollapse: "collapse" }}>
+                        <thead>
+                           <tr>
+                              {["S.No", "Item", "Description", "Qty", "Rate", "Supplier", "Amount"].map(h => (
+                                 <th key={h} style={{border: "1px solid #000", padding: 6, background: "#000", color: "#fff", fontSize: 11}}>{h}</th>
+                              ))}
+                           </tr>
                         </thead>
                         <tbody>
                            {getMaterialsWithDetails().map((m, i) => (
-                              <tr key={i} className="border-b">
-                                 <td className="p-2">{m.name}</td>
-                                 <td className="p-2 text-center">{m.quantity}</td>
-                                 <td className="p-2 text-center">{m.rate}</td>
-                                 <td className="p-2 text-right">{(m.quantity * m.rate).toFixed(2)}</td>
+                              <tr key={i}>
+                                 <td style={{border: "1px solid #000", padding: 6}}>{i + 1}</td>
+                                 <td style={{border: "1px solid #000", padding: 6}}>{m.name}</td>
+                                 <td style={{border: "1px solid #000", padding: 6}}>{materialDescriptions[m.id] || m.name}</td>
+                                 <td style={{border: "1px solid #000", padding: 6}}>{m.quantity}</td>
+                                 <td style={{border: "1px solid #000", padding: 6}}>{m.rate}</td>
+                                 <td style={{border: "1px solid #000", padding: 6}}>{m.shopName}</td>
+                                 <td style={{border: "1px solid #000", padding: 6, textAlign: "right"}}>{(m.quantity * m.rate).toFixed(2)}</td>
                               </tr>
                            ))}
                         </tbody>
                      </table>
 
-                     {/* Grand Total */}
-                     <div className="flex justify-end mt-10">
-                        <div className="w-64 space-y-2">
-                           <div className="flex justify-between"><span>Subtotal:</span><span>₹{subTotal.toFixed(2)}</span></div>
-                           <div className="flex justify-between font-bold text-xl border-t pt-2"><span>Total:</span><span>₹{grandTotal.toFixed(2)}</span></div>
-                        </div>
+                     {/* TOTALS */}
+                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                        <table style={{ width: 300 }}>
+                          <tbody>
+                            <tr><td>Sub Total</td><td style={{ textAlign: "right" }}>{subTotal.toFixed(2)}</td></tr>
+                            <tr><td>SGST 9%</td><td style={{ textAlign: "right" }}>{(subTotal * 0.09).toFixed(2)}</td></tr>
+                            <tr><td>CGST 9%</td><td style={{ textAlign: "right" }}>{(subTotal * 0.09).toFixed(2)}</td></tr>
+                            <tr><td>Round Off</td><td style={{ textAlign: "right" }}>{(Math.round(grandTotal) - grandTotal).toFixed(2)}</td></tr>
+                            <tr><td><strong>Total</strong></td><td style={{ textAlign: "right" }}><strong>₹{grandTotal.toFixed(2)}</strong></td></tr>
+                            <tr><td><strong>Balance Due</strong></td><td style={{ textAlign: "right" }}><strong>₹{grandTotal.toFixed(2)}</strong></td></tr>
+                          </tbody>
+                        </table>
                      </div>
 
-                     <div className="mt-20">
-                        <div className="w-48 border-t border-black pt-2 text-center">Authorized Signature</div>
+                     {/* SIGNATURE */}
+                     <div style={{ marginTop: 50 }}>
+                        <div style={{ width: 200, borderTop: "1px solid #000" }} />
+                        <div>Authorized Signature</div>
                      </div>
                   </div>
                   <Button onClick={() => handleExportPDF("boq-final-pdf")} className="w-full h-12">Export Final Invoice</Button>

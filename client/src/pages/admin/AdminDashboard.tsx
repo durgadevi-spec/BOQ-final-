@@ -992,18 +992,7 @@ export default function AdminDashboard() {
               <div className="text-3xl font-bold">{materials.length}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Alerts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-yellow-600 flex items-center gap-2">
-                <AlertTriangle className="h-6 w-6" /> 2
-              </div>
-            </CardContent>
-          </Card>
+        
         </div>
 
           {(isAdminOrSoftwareTeam || user?.role === "purchase_team") && (
@@ -1011,7 +1000,7 @@ export default function AdminDashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle>All Shops</CardTitle>
-                  <CardDescription className="text-sm">List of shops (compact)</CardDescription>
+                  <CardDescription className="text-sm">List of shops</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="mb-2">
@@ -1068,7 +1057,7 @@ export default function AdminDashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle>All Materials</CardTitle>
-                  <CardDescription className="text-sm">List of materials (compact)</CardDescription>
+                  <CardDescription className="text-sm">List of materials</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="mb-2">

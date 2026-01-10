@@ -15,6 +15,9 @@ export default function SSWorkEstimator() {
   const [length, setLength] = useState("");
   const [materials, setMaterials] = useState<any[]>([]);
   const { shops: storeShops } = useData();
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
 
   const calculate = () => {
     const l = parseFloat(length) || 0;
@@ -90,6 +93,8 @@ export default function SSWorkEstimator() {
                   onBack={() => setStep(2)}
                   storeShops={storeShops}
                   selectedMaterials={[]}
+                  materialDescriptions={materialDescriptions}
+                  onMaterialDescriptionsChange={setMaterialDescriptions}
                 />
               )}
             </AnimatePresence>

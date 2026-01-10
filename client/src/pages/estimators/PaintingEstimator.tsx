@@ -47,6 +47,9 @@ export default function PaintingEstimator() {
   const [finalCustomerAddress, setFinalCustomerAddress] = useState("");
   const [finalTerms, setFinalTerms] = useState("Payment: 50% Advance, 50% on Completion");
   const [finalShopDetails, setFinalShopDetails] = useState("Main Showroom\nChennai");
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
 
   // --- Logic Helpers ---
   const availableMaterials = useMemo(() => {
@@ -64,8 +67,8 @@ export default function PaintingEstimator() {
     return selectedMaterials.map((sel) => {
       const mat = storeMaterials.find((m) => m.id === sel.materialId);
       const shop = storeShops.find((s) => s.id === sel.selectedShopId);
-      const qty = editableMaterials[mat?.id]?.quantity ?? calculateQuantity(mat);
-      const rate = editableMaterials[mat?.id]?.rate ?? (mat?.rate || 0);
+      const qty = mat?.id ? (editableMaterials[mat.id]?.quantity ?? calculateQuantity(mat)) : calculateQuantity(mat);
+      const rate = mat?.id ? (editableMaterials[mat.id]?.rate ?? (mat?.rate || 0)) : (mat?.rate || 0);
       return { ...mat, quantity: qty, rate: rate, shopName: shop?.name || "Market", amount: qty * rate };
     });
   };
@@ -79,7 +82,9 @@ export default function PaintingEstimator() {
 
   const handleExportFinalBOQ = () => {
     const element = document.getElementById("boq-final-pdf");
-    html2pdf().from(element).set({ margin: 0, filename: `Painting_Invoice_${finalBillNo}.pdf` }).save();
+    if (element) {
+      html2pdf().from(element).set({ margin: 0, filename: `Painting_Invoice_${finalBillNo}.pdf` }).save();
+    }
   };
 
   return (
@@ -90,6 +95,7 @@ export default function PaintingEstimator() {
           {/* STEP 1: SYSTEM SELECTION */}
           {step === 1 && (
             <motion.div key="s1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Label className="text-lg font-semibold">Select Type</Label>
               {Object.entries(PAINT_CONFIG).map(([key, config]) => (
                 <Card key={key} className={cn("cursor-pointer border-2 transition-all", paintType === key ? "border-primary bg-primary/5" : "")} onClick={() => setPaintType(key as any)}>
                   <CardContent className="p-6 flex items-center gap-4">
@@ -108,6 +114,7 @@ export default function PaintingEstimator() {
           {/* STEP 2: DIMENSIONS */}
           {step === 2 && (
             <motion.div key="s2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-xl mx-auto">
+               <Label className="text-lg font-semibold">Enter Dimensions</Label>
               <div className="bg-white p-8 rounded-xl border space-y-4">
                 <div className="space-y-2"><Label>Wall Length (ft)</Label><Input type="number" value={length} onChange={e => setLength(Number(e.target.value))} /></div>
                 <div className="space-y-2"><Label>Wall Height (ft)</Label><Input type="number" value={height} onChange={e => setHeight(Number(e.target.value))} /></div>
@@ -229,6 +236,16 @@ export default function PaintingEstimator() {
               </div>
               <div><Label>Terms & Conditions</Label><Input value={finalTerms} onChange={(e) => setFinalTerms(e.target.value)} /></div>
 
+              {/* MATERIAL DESCRIPTION INPUT */}
+              <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                <Label className="font-semibold">Material Description Entry</Label>
+                <select className="w-full border rounded px-3 py-2" value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(e.target.value)}>
+                  <option value="">Select Material</option>
+                  {currentMaterials.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+                </select>
+                {selectedMaterialId && (<Input placeholder="Enter description for selected material" value={materialDescriptions[selectedMaterialId] || ""} onChange={(e) => setMaterialDescriptions((prev) => ({...prev,[selectedMaterialId]: e.target.value,}))} />)}
+              </div>
+
               <div id="boq-final-pdf" style={{ width: "210mm", minHeight: "297mm", padding: "20mm", background: "#fff", color: "#000", fontFamily: "Arial", fontSize: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <img src={ctintLogo} alt="Logo" style={{ height: 60 }} />
@@ -256,7 +273,7 @@ export default function PaintingEstimator() {
                 <table style={{ width: "100%", marginTop: 20, borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      {["S.No", "Item", "HSN", "Qty", "Rate", "Supplier", "Amount"].map(h => (
+                      {["S.No", "Item", "Description", "HSN", "Qty", "Rate", "Supplier", "Amount"].map(h => (
                         <th key={h} style={{ border: "1px solid #000", padding: 6, background: "#000", color: "#fff", fontSize: 11 }}>{h}</th>
                       ))}
                     </tr>
@@ -266,6 +283,7 @@ export default function PaintingEstimator() {
                       <tr key={i}>
                         <td style={{ border: "1px solid #000", padding: 6 }}>{i + 1}</td>
                         <td style={{ border: "1px solid #000", padding: 6 }}>{m.name}</td>
+                        <td style={{ border: "1px solid #000", padding: 6 }}>{materialDescriptions[m.id] || m.name}</td>
                         <td style={{ border: "1px solid #000", padding: 6 }}>3208</td>
                         <td style={{ border: "1px solid #000", padding: 6 }}>{m.quantity}</td>
                         <td style={{ border: "1px solid #000", padding: 6 }}>{m.rate}</td>

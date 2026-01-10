@@ -72,6 +72,9 @@ export default function FalseCeilingEstimator() {
   const [finalCustomerName, setFinalCustomerName] = useState("");
   const [finalCustomerAddress, setFinalCustomerAddress] = useState("");
   const [finalTerms, setFinalTerms] = useState("");
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [finalShopDetails, setFinalShopDetails] = useState("");
 
   /* ================= HELPERS ================= */
@@ -514,6 +517,16 @@ export default function FalseCeilingEstimator() {
       />
     </div>
 
+    {/* MATERIAL DESCRIPTION INPUT */}
+    <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+      <Label className="font-semibold">Material Description Entry</Label>
+      <select className="w-full border rounded px-3 py-2" value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(e.target.value)}>
+        <option value="">Select Material</option>
+        {getMaterialsWithDetails().map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+      </select>
+      {selectedMaterialId && (<Input placeholder="Enter description for selected material" value={materialDescriptions[selectedMaterialId] || ""} onChange={(e) => setMaterialDescriptions((prev) => ({...prev,[selectedMaterialId]: e.target.value,}))} />)}
+    </div>
+
     {/* ================= PDF ================= */}
     <div
       id="boq-final-pdf"
@@ -575,7 +588,7 @@ export default function FalseCeilingEstimator() {
       <table style={{ width: "100%", marginTop: 20, borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            {["S.No", "Item", "Description", "HSN", "Qty", "Rate", "Supplier", "Customer", "Amount"].map(h => (
+            {["S.No", "Item", "Description", "HSN", "Qty", "Rate", "Supplier", "Amount"].map(h => (
               <th
                 key={h}
                 style={{
@@ -597,12 +610,11 @@ export default function FalseCeilingEstimator() {
             <tr key={m.id}>
               <td style={{ border: "1px solid #000", padding: 6 }}>{i + 1}</td>
               <td style={{ border: "1px solid #000", padding: 6 }}>{m.name}</td>
-              <td style={{ border: "1px solid #000", padding: 6 }}>{(m as any).description || "-"}</td>
+              <td style={{ border: "1px solid #000", padding: 6 }}>{materialDescriptions[m.id] || (m as any).description || "-"}</td>
               <td style={{ border: "1px solid #000", padding: 6 }}>7308</td>
               <td style={{ border: "1px solid #000", padding: 6 }}>{m.quantity}</td>
               <td style={{ border: "1px solid #000", padding: 6 }}>{m.rate}</td>
               <td style={{ border: "1px solid #000", padding: 6 }}>{m.shopName}</td>
-              <td style={{ border: "1px solid #000", padding: 6 }}>{finalCustomerName}</td>
               <td style={{ border: "1px solid #000", padding: 6, textAlign: "right" }}>
                 {(m.quantity * m.rate).toFixed(2)}
               </td>

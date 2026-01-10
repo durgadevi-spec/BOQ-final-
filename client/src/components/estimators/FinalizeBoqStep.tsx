@@ -19,6 +19,8 @@ interface FinalizeBoqStepProps {
   onBack: () => void;
   storeShops?: any[];
   selectedMaterials?: any[];
+  materialDescriptions?: Record<string, string>;
+  onMaterialDescriptionsChange?: (descriptions: Record<string, string>) => void;
 }
 
 const ctintLogo = "/image.png";
@@ -29,6 +31,8 @@ export function FinalizeBoqStep({
   onBack,
   storeShops = [],
   selectedMaterials = [],
+  materialDescriptions = {},
+  onMaterialDescriptionsChange,
 }: FinalizeBoqStepProps) {
   const [finalBillNo, setFinalBillNo] = useState<string>("");
   const [finalBillDate, setFinalBillDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -37,6 +41,8 @@ export function FinalizeBoqStep({
   const [finalCustomerName, setFinalCustomerName] = useState<string>("");
   const [finalCustomerAddress, setFinalCustomerAddress] = useState<string>("");
   const [finalShopDetails, setFinalShopDetails] = useState<string>("");
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
+  const [localDescriptions, setLocalDescriptions] = useState<Record<string, string>>(materialDescriptions);
 
   // Auto-fill shop details from first material's shop
   useEffect(() => {
@@ -130,6 +136,16 @@ export function FinalizeBoqStep({
         <Input value={finalTerms} onChange={(e) => setFinalTerms(e.target.value)} />
       </div>
 
+      {/* MATERIAL DESCRIPTION INPUT */}
+      <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+        <Label className="font-semibold">Material Description Entry</Label>
+        <select className="w-full border rounded px-3 py-2" value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(e.target.value)}>
+          <option value="">Select Material</option>
+          {materials.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+        </select>
+        {selectedMaterialId && (<Input placeholder="Enter description for selected material" value={localDescriptions[selectedMaterialId] || ""} onChange={(e) => {const updated = {...localDescriptions, [selectedMaterialId]: e.target.value}; setLocalDescriptions(updated); onMaterialDescriptionsChange?.(updated);}} />)}
+      </div>
+
       {/* ================= PDF ================= */}
       <div
         id="boq-final-pdf"
@@ -189,7 +205,7 @@ export function FinalizeBoqStep({
         <table style={{ width: "100%", marginTop: 20, borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["S.No", "Item", "Unit", "Qty", "Rate", "Supplier", "Amount"].map((h) => (
+              {["S.No", "Item", "Description", "Unit", "Qty", "Rate", "Amount"].map((h) => (
                 <th
                   key={h}
                   style={{
@@ -212,6 +228,7 @@ export function FinalizeBoqStep({
               <tr key={m.id}>
                 <td style={{ border: "1px solid #000", padding: 6, textAlign: "center" }}>{i + 1}</td>
                 <td style={{ border: "1px solid #000", padding: 6 }}>{m.name}</td>
+                <td style={{ border: "1px solid #000", padding: 6 }}>{localDescriptions[m.id] || m.name}</td>
                 <td style={{ border: "1px solid #000", padding: 6, textAlign: "center" }}>{m.unit}</td>
                 <td style={{ border: "1px solid #000", padding: 6, textAlign: "right" }}>
                   {Number(m.quantity || 0).toFixed(0)}
@@ -219,7 +236,6 @@ export function FinalizeBoqStep({
                 <td style={{ border: "1px solid #000", padding: 6, textAlign: "right" }}>
                   {Number(m.rate || 0).toFixed(2)}
                 </td>
-                <td style={{ border: "1px solid #000", padding: 6 }}>{m.shopName}</td>
                 <td style={{ border: "1px solid #000", padding: 6, textAlign: "right", fontWeight: 600 }}>
                   {(Number(m.quantity || 0) * Number(m.rate || 0)).toFixed(2)}
                 </td>

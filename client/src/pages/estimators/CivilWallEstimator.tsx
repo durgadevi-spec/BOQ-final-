@@ -54,6 +54,9 @@ export default function CivilWallEstimator() {
   const [finalCustomerName, setFinalCustomerName] = useState<string>("");
   const [finalCustomerAddress, setFinalCustomerAddress] = useState<string>("");
   const [finalShopDetails, setFinalShopDetails] = useState<string>("");
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
   // Compute materials automatically
   useEffect(() => {
     if (length && height && wallType && subOption) {
@@ -762,8 +765,9 @@ export default function CivilWallEstimator() {
                   <div className="space-y-2">
                     {getFinalMaterials().length > 0 ? (
                       <>
-                        <div className="grid grid-cols-7 gap-2 p-2 text-sm text-muted-foreground">
+                        <div className="grid grid-cols-8 gap-2 p-2 text-sm text-muted-foreground">
                           <div className="col-span-2 font-medium">Item</div>
+                          <div>Description</div>
                           <div className="text-center">Qty</div>
                           <div className="text-center">Unit</div>
                           <div className="text-center">Shop</div>
@@ -771,24 +775,26 @@ export default function CivilWallEstimator() {
                           <div className="text-right">Amount (₹)</div>
                         </div>
                         {getFinalMaterials().map((mat) => (
-                          <div key={mat.id} className={cn("p-3 border rounded grid grid-cols-7 items-center")}>
+                          <div key={mat.id} className={cn("p-3 border rounded grid grid-cols-8 items-center")}>
                             <span className="col-span-2 font-medium">{mat.name}</span>
+                            <span className="text-sm">{materialDescriptions[mat.id] || mat.name}</span>
                             <div className="col-span-1 text-center">
                               <Input
                                 type="number"
                                 value={editableMaterials[mat.id]?.quantity ?? mat.quantity}
-                                onChange={(e) => setEditableQuantity(mat.id, parseInt(e.target.value || "0", 10))}
+                                onChange={(e) => setEditableMaterials((prev) => ({...prev, [mat.id]: {...(prev[mat.id] || {}), quantity: Number(e.target.value)}}))}
                                 className="w-20 mx-auto"
                               />
                             </div>
                             <span className="col-span-1 text-center text-muted-foreground">{mat.unit}</span>
                             <div className="col-span-1 text-center font-semibold">{mat.shopName || "-"}</div>
                             <div className="col-span-1 text-center">
-                              <div className="inline-flex items-center justify-center gap-2">
-                                <Button size="sm" onClick={() => changeEditableRate(mat.id, -1)}>-</Button>
-                                <div className="font-semibold">₹{editableMaterials[mat.id]?.rate ?? mat.rate}</div>
-                                <Button size="sm" onClick={() => changeEditableRate(mat.id, 1)}>+</Button>
-                              </div>
+                              <Input
+                                type="number"
+                                value={editableMaterials[mat.id]?.rate ?? mat.rate}
+                                onChange={(e) => setEditableMaterials((prev) => ({...prev, [mat.id]: {...(prev[mat.id] || {}), rate: Number(e.target.value)}}))}
+                                className="w-20 mx-auto"
+                              />
                             </div>
                             <div className="col-span-1 text-right font-semibold">₹{((editableMaterials[mat.id]?.quantity ?? mat.quantity) * (editableMaterials[mat.id]?.rate ?? mat.rate)).toFixed(2)}</div>
                           </div>
@@ -994,6 +1000,35 @@ export default function CivilWallEstimator() {
                     </div>
                   </div>
 
+                  {/* MATERIAL DESCRIPTION INPUT */}
+                  <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                    <Label className="font-semibold">Material Description Entry</Label>
+                    <select
+                      className="w-full border rounded px-3 py-2"
+                      value={selectedMaterialId}
+                      onChange={(e) => setSelectedMaterialId(e.target.value)}
+                    >
+                      <option value="">Select Material</option>
+                      {getMaterialsWithDetails().map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedMaterialId && (
+                      <Input
+                        placeholder="Enter description for selected material"
+                        value={materialDescriptions[selectedMaterialId] || ""}
+                        onChange={(e) =>
+                          setMaterialDescriptions((prev) => ({
+                            ...prev,
+                            [selectedMaterialId]: e.target.value,
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+
                   <div id="boq-final-pdf" style={{ width: "210mm", minHeight: "297mm", padding: "20mm", background: "#fff", color: "#000", fontFamily: "Arial", fontSize: 12 }}>
                     {/* HEADER: logo left, company block + bill info right (match Doors layout) */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1023,15 +1058,10 @@ export default function CivilWallEstimator() {
 
                     <hr style={{ margin: "10px 0" }} />
 
-                    <div style={{ marginBottom: 12, lineHeight: 1.5 }}>
-                      <strong style={{ fontSize: 12 }}>Bill To:</strong>
-                      <div style={{ fontSize: 11, marginTop: 4 }}>{finalCustomerName}<br />{finalCustomerAddress}</div>
-                    </div>
-
                     <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
                       <thead>
                         <tr>
-                          {["#","Item","Unit","Qty","Rate","Supplier","Amount"].map((h) => (
+                          {["#","Item","Description","Unit","Qty","Rate","Supplier","Amount"].map((h) => (
                             <th key={h} style={{ border: "1px solid #000", padding: 6, background: "#000", color: "#fff", fontSize: 10, textAlign: h === "Qty" || h === "Rate" || h === "Amount" ? "right" : "left", fontWeight: "bold" }}>{h}</th>
                           ))}
                         </tr>
@@ -1041,6 +1071,7 @@ export default function CivilWallEstimator() {
                           <tr key={m.id}>
                             <td style={{ border: "1px solid #000", padding: 6, textAlign: "center" }}>{i+1}</td>
                             <td style={{ border: "1px solid #000", padding: 6 }}>{m.name}</td>
+                            <td style={{ border: "1px solid #000", padding: 6 }}>{materialDescriptions[m.id] || m.name}</td>
                             <td style={{ border: "1px solid #000", padding: 6, textAlign: "center" }}>{m.unit}</td>
                             <td style={{ border: "1px solid #000", padding: 6, textAlign: "right" }}>{m.quantity}</td>
                             <td style={{ border: "1px solid #000", padding: 6, textAlign: "right" }}>{Number(m.rate || 0).toFixed(2)}</td>

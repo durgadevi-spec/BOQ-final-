@@ -32,6 +32,9 @@ export default function FlooringEstimator() {
   const [finalCustomerAddress, setFinalCustomerAddress] = useState("");
   const [finalTerms, setFinalTerms] = useState("Payment due within 15 days");
   const [finalShopDetails, setFinalShopDetails] = useState("");
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
 
   const availableFlooring = storeMaterials.filter(m => m.category?.toLowerCase() === "flooring");
 
@@ -172,7 +175,7 @@ export default function FlooringEstimator() {
                         <h3 style={{ fontWeight: 600, marginBottom: "8px" }}>Materials Schedule</h3>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
                           <thead style={{ backgroundColor: "#f3f4f6" }}>
-                            <tr>{["S.No","Description","Unit","Qty","Rate (₹)","Supplier","Amount (₹)"].map((h) => (
+                            <tr>{["S.No","Item","Description","Unit","Qty","Rate (₹)","Supplier","Amount (₹)"].map((h) => (
                               <th key={h} style={{ border: "1px solid #d1d5db", padding: "8px", textAlign: h === "Qty" || h.includes("Rate") || h.includes("Amount") ? "right" : "left" }}>{h}</th>
                             ))}</tr>
                           </thead>
@@ -181,6 +184,7 @@ export default function FlooringEstimator() {
                               <tr key={mat.id}>
                                 <td style={{ border: "1px solid #d1d5db", padding: "8px" }}>{index + 1}</td>
                                 <td style={{ border: "1px solid #d1d5db", padding: "8px", fontWeight: 500 }}>{mat.name}</td>
+                                <td style={{ border: "1px solid #d1d5db", padding: "8px" }}>{materialDescriptions[mat.id] || mat.name}</td>
                                 <td style={{ border: "1px solid #d1d5db", padding: "8px", textAlign: "center" }}>{mat.unit || 'sqft'}</td>
                                 <td style={{ border: "1px solid #d1d5db", padding: "8px", textAlign: "center" }}>{mat.quantity}</td>
                                 <td style={{ border: "1px solid #d1d5db", padding: "8px", textAlign: "right" }}>{mat.rate}</td>
@@ -222,33 +226,49 @@ export default function FlooringEstimator() {
                   </div>
                   <div><Label>Terms & Conditions</Label><Input value={finalTerms} onChange={e => setFinalTerms(e.target.value)} /></div>
 
+                  {/* MATERIAL DESCRIPTION INPUT */}
+                  <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                    <Label className="font-semibold">Material Description Entry</Label>
+                    <select className="w-full border rounded px-3 py-2" value={selectedMaterialId} onChange={(e) => setSelectedMaterialId(e.target.value)}>
+                      <option value="">Select Material</option>
+                      {getMaterialsWithDetails().map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+                    </select>
+                    {selectedMaterialId && (<Input placeholder="Enter description for selected material" value={materialDescriptions[selectedMaterialId] || ""} onChange={(e) => setMaterialDescriptions((prev) => ({...prev,[selectedMaterialId]: e.target.value,}))} />)}
+                  </div>
+
                   <div id="boq-final-pdf" style={{ width: "210mm", minHeight: "297mm", padding: "20mm", background: "#fff", color: "#000", fontFamily: "Helvetica, Arial, sans-serif", fontSize: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <img src={ctintLogo} alt="Logo" style={{ height: 56 }} />
+                    
+                    {/* HEADER */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div style={{ width: "55%", lineHeight: 1.5, display: "flex", gap: 12 }}>
+                        <img src={ctintLogo} alt="Logo" style={{ height: 56, flexShrink: 0 }} />
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 16 }}>Concept Trunk Interiors</div>
-                          <div style={{ fontSize: 12, color: '#374151' }}>12/36A, Indira Nagar, Medavakkam, Chennai – 600100</div>
-                          <div style={{ fontSize: 12, color: '#374151' }}>GSTIN: 33ASOPS5560M1Z1</div>
+                          <strong style={{ fontSize: 14 }}>Concept Trunk Interiors</strong><br />
+                          12/36A, Indira Nagar<br />
+                          Medavakkam<br />
+                          Chennai – 600100<br />
+                          GSTIN: 33ASOPS5560M1Z1
+
+                          <br /><br />
+
+                          <strong>Bill From</strong><br />
+                          <pre style={{ margin: 0, fontFamily: "Arial", whiteSpace: "pre-wrap", fontSize: 11 }}>
+                            {finalShopDetails}
+                          </pre>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 700, fontSize: 20 }}>FINAL BOQ</div>
-                        <div style={{ marginTop: 6 }}>Bill No: <strong>{finalBillNo}</strong></div>
-                        <div>Bill Date: <strong>{finalBillDate}</strong></div>
-                        <div>Due Date: <strong>{finalDueDate}</strong></div>
-                      </div>
-                    </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
-                      <div style={{ width: '48%' }}>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>BILL TO</div>
-                        <div style={{ fontWeight: 700 }}>{finalCustomerName || 'Customer'}</div>
-                        <div style={{ whiteSpace: 'pre-line', marginTop: 6 }}>{finalCustomerAddress || 'N/A'}</div>
-                      </div>
-                      <div style={{ width: '48%' }}>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>SUPPLIER</div>
-                        <div style={{ fontWeight: 700, whiteSpace: 'pre-line' }}>{finalShopDetails || 'Supplier details'}</div>
+                      <div style={{ width: "40%", lineHeight: 1.6, textAlign: "right" }}>
+                        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>FINAL BOQ</div>
+                        <div><strong>Bill No</strong> : {finalBillNo}</div>
+                        <div><strong>Bill Date</strong> : {finalBillDate}</div>
+                        <div><strong>Due Date</strong> : {finalDueDate}</div>
+                        <div style={{ marginTop: 6 }}>
+                          <strong>Terms</strong> : {finalTerms}
+                        </div>
+                        <div style={{ marginTop: 6 }}>
+                          <strong>Customer</strong> : {finalCustomerName || "Customer"}
+                        </div>
                       </div>
                     </div>
 
@@ -256,7 +276,7 @@ export default function FlooringEstimator() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead style={{ background: '#f8fafc' }}>
                           <tr>
-                            {['S.No', 'Description', 'Unit', 'Qty', 'Rate (₹)', 'Supplier', 'Amount (₹)'].map(h => (
+                            {['S.No', 'Item', 'Description', 'Unit', 'Qty', 'Rate (₹)', 'Supplier', 'Amount (₹)'].map(h => (
                               <th key={h} style={{ textAlign: h === 'Qty' || h.includes('Rate') || h.includes('Amount') ? 'right' : 'left', padding: 10, borderBottom: '1px solid #e6e6e6', fontSize: 12 }}>{h}</th>
                             ))}
                           </tr>
@@ -266,6 +286,7 @@ export default function FlooringEstimator() {
                             <tr key={m.id}>
                               <td style={{ padding: 10, borderBottom: '1px solid #f1f5f9', width: 40 }}>{i + 1}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>{m.name}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>{materialDescriptions[m.id] || m.name}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid #f1f5f9', width: 80 }}>{m.unit || 'sqft'}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'right', width: 80 }}>{m.quantity}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'right', width: 100 }}>{(Number(m.rate) || 0).toFixed(2)}</td>
@@ -278,26 +299,21 @@ export default function FlooringEstimator() {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                      <div style={{ width: 320, border: '1px solid #e6e6e6', borderRadius: 6, padding: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div>Sub Total</div><div>₹{subTotal.toFixed(2)}</div></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div>SGST 9%</div><div>₹{sgst.toFixed(2)}</div></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div>CGST 9%</div><div>₹{cgst.toFixed(2)}</div></div>
-                        <div style={{ height: 1, background: '#e6e6e6', margin: '8px 0' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}><div>Grand Total</div><div>₹{grandTotal.toFixed(2)}</div></div>
-                        <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>Round Off: ₹{roundOff.toFixed(2)}</div>
-                      </div>
+                      <table style={{ width: 300 }}>
+                        <tbody>
+                          <tr><td>Sub Total</td><td style={{ textAlign: "right" }}>{subTotal.toFixed(2)}</td></tr>
+                          <tr><td>SGST 9%</td><td style={{ textAlign: "right" }}>{sgst.toFixed(2)}</td></tr>
+                          <tr><td>CGST 9%</td><td style={{ textAlign: "right" }}>{cgst.toFixed(2)}</td></tr>
+                          <tr><td>Round Off</td><td style={{ textAlign: "right" }}>{roundOff.toFixed(2)}</td></tr>
+                          <tr><td><strong>Total</strong></td><td style={{ textAlign: "right" }}><strong>₹{grandTotal.toFixed(2)}</strong></td></tr>
+                        </tbody>
+                      </table>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
-                      <div>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>Terms & Conditions</div>
-                        <div style={{ whiteSpace: 'pre-line', color: '#374151' }}>{finalTerms}</div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ width: 200, borderTop: '1px solid #000', marginBottom: 6 }} />
-                        <div style={{ fontWeight: 700 }}>Authorized Signatory</div>
-                        <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>For Concept Trunk Interiors</div>
-                      </div>
+                    {/* SIGNATURE */}
+                    <div style={{ marginTop: 50 }}>
+                      <div style={{ width: 200, borderTop: "1px solid #000" }} />
+                      <div>Authorized Signature</div>
                     </div>
                   </div>
 

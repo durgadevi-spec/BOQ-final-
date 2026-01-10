@@ -56,6 +56,10 @@ export default function ElectricalEstimator() {
   const [finalShopDetails, setFinalShopDetails] = useState("");
   const [finalTerms, setFinalTerms] = useState("1. Goods once sold will not be taken back.\n2. Interest @18% will be charged if payment is not made within due date.");
 
+  // Material-wise descriptions
+  const [materialDescriptions, setMaterialDescriptions] = useState<Record<string, string>>({});
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
+
   // --- LOGIC: FETCH ELECTRICAL MATERIALS ---
   const availableMaterials = useMemo(() => {
     const keywords = ["WIRE", "SWITCH", "SOCKET", "MCB", "CONDUIT", "PVC", "ELECTRICAL", "DB"];
@@ -244,8 +248,9 @@ export default function ElectricalEstimator() {
               {step === 4 && (
                 <motion.div key="s4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                   <Label className="text-lg font-semibold">Selected Materials</Label>
-                  <div className="grid grid-cols-7 gap-2 p-2 text-xs font-bold text-muted-foreground border-b">
+                  <div className="grid grid-cols-8 gap-2 p-2 text-xs font-bold text-muted-foreground border-b">
                     <div className="col-span-2">Item</div>
+                    <div>Description</div>
                     <div className="text-center">Qty</div>
                     <div className="text-center">Unit</div>
                     <div className="text-center">Shop</div>
@@ -253,8 +258,9 @@ export default function ElectricalEstimator() {
                     <div className="text-right">Total</div>
                   </div>
                   {materials.map(mat => (
-                    <div key={mat.id} className="grid grid-cols-7 gap-2 items-center p-2 border-b">
+                    <div key={mat.id} className="grid grid-cols-8 gap-2 items-center p-2 border-b">
                       <div className="col-span-2 text-sm font-medium">{mat.name}</div>
+                      <div className="text-xs">{materialDescriptions[mat.id] || mat.name}</div>
                       <Input type="number" className="h-8" value={editableMaterials[mat.id!]?.quantity} onChange={e => setEditableMaterials(p => ({...p, [mat.id!]: {...p[mat.id!], quantity: Number(e.target.value)}}))} />
                       <div className="text-center text-xs">{mat.unit}</div>
                       <div className="text-center text-xs">{mat.shopName}</div>
@@ -344,6 +350,39 @@ export default function ElectricalEstimator() {
                     <Input value={finalTerms} onChange={(e) => setFinalTerms(e.target.value)} />
                   </div>
 
+                  {/* MATERIAL DESCRIPTION INPUT */}
+                  <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                    <Label className="font-semibold">Material Description Entry</Label>
+
+                    {/* Material selector */}
+                    <select
+                      className="w-full border rounded px-3 py-2"
+                      value={selectedMaterialId}
+                      onChange={(e) => setSelectedMaterialId(e.target.value)}
+                    >
+                      <option value="">Select Material</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Description input */}
+                    {selectedMaterialId && (
+                      <Input
+                        placeholder="Enter description for selected material"
+                        value={materialDescriptions[selectedMaterialId] || ""}
+                        onChange={(e) =>
+                          setMaterialDescriptions((prev) => ({
+                            ...prev,
+                            [selectedMaterialId]: e.target.value,
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+
                   {/* PDF CONTAINER */}
                   <div id="boq-final-pdf" style={{ width: "210mm", minHeight: "297mm", padding: "20mm", background: "#fff", color: "#000", fontFamily: "Arial", fontSize: 12 }}>
                     
@@ -391,7 +430,7 @@ export default function ElectricalEstimator() {
                           <tr key={m.id}>
                             <td style={{ border: "1px solid #000", padding: 6 }}>{i + 1}</td>
                             <td style={{ border: "1px solid #000", padding: 6 }}>{m.name}</td>
-                            <td style={{ border: "1px solid #000", padding: 6 }}>{m.subCategory || "Electrical"}</td>
+                            <td style={{ border: "1px solid #000", padding: 6 }}>{materialDescriptions[m.id] || m.subCategory || "Electrical"}</td>
                             <td style={{ border: "1px solid #000", padding: 6 }}>8536</td>
                             <td style={{ border: "1px solid #000", padding: 6 }}>{m.quantity}</td>
                             <td style={{ border: "1px solid #000", padding: 6 }}>{Number(m.rate).toFixed(2)}</td>
